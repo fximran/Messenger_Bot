@@ -1,0 +1,112 @@
+# Cyber.js 
+
+Cyber.newVersionDetected=Tumi use korteso version %1, latest version hoilo %2.
+Cyber.errorFormat=Malformed module!
+Cyber.nameExist=Module er name onno module er shathe mil ase!
+Cyber.notFoundLanguage=Module %1 tomer language support kore na
+Cyber.notFoundPackage=%2 module er jonno package %1 paoa jacche na, install kortesi...
+Cyber.cantInstallPackage=Package %1 install kora jacche na module %2 jonno, error: %3
+Cyber.loadedPackage=Module %1 er shob package successfully install kora hoise
+Cyber.loadedConfig=Module %1 er config successfully install kora hoise
+Cyber.cantLoadConfig=Module %1 er config install kora jacche na, error: %2
+Cyber.cantOnload=Module %1 er setup launch kora jacche na, error: %1
+Cyber.successLoadModule=Module %1 successfully install hoise
+Cyber.failLoadModule=Module %1 install kora jacche na, error: %2
+Cyber.finishLoadModule=%1 module commands ebong %2 module events successfully install hoise
+Cyber.foundPathAppstate=Ullashstate successfully paoa hoise
+Cyber.notFoundPathAppstate=Error! appstate file paoa jacche na, mone hocche file malformed!
+Cyber.checkListGban=Global ban list check kortesi...
+Cyber.banDevice=Tomer device ULLASH theke ban kora hoise, aro info er jonno contact koro facebook m.me/CYBER.ULLASH, jodi unban key thake fill koro
+Cyber.keyNotSameFormat=Wrong format, code e 6 number thakte hobe
+Cyber.codeInputExpired=Tomer code wrong ba outdated
+Cyber.unbanDeviceSuccess=Tomer device unban hoise, please restart kore use koro
+Cyber.userBanned=Tumi ullash e ban kora hoiso jokhon %1, reason: %2. Aro info er jonno contact koro facebook m.me/CYBER.ULLASH
+Cyber.finishCheckListGban=Global ban list check complete
+Cyber.handleListenError=handleListener e unexpected error hoise, error: %1
+Cyber.warningSourceCode=DETECTED THAT SOURCE CODE ER STRUCTURE CHANGE HOISE, STOP NOW!
+Cyber.refreshListen=HandleListener refresh hoise...
+Cyber.successConnectDatabase=Database successfully connect hoise!
+Cyber.failConnectDatabase=Database connect kora jacche na, error: %1
+
+# includes/listen.js
+
+listen.startLoadEnvironment=Environment variable load kortesi ...
+listen.loadedEnvironmentThread=Thread environment variable successfully load hoise
+listen.loadedEnvironmentUser=User environment variable successfully load hoise
+listen.successLoadEnvironment=Environment variable successfully load hoise
+listen.failLoadEnvironment=Environment variable load kora jacche na, error: %1
+
+# includes/controller/currencies.js
+
+currencies.needObjectOrArray=Array or Object thakte hobe, ba duita ekshathe thakte pare
+currencies.needObject=Object thakte hobe
+currencies.needNumber=Number thakte hobe
+
+# includes/controller/threads.js
+
+threads.needObjectOrArray=Array or Object thakte hobe, ba duita ekshathe thakte pare
+threads.needObject=Object thakte hobe
+
+# includes/controller/users.js
+
+users.needObjectOrArray=Array or Object thakte hobe, ba duita ekshathe thakte pare
+users.needObject=Object thakte hobe
+
+# includes/handle/handleCommand.js
+
+handleCommand.userBanned=Box e ablamir oporad e tore ban kore deya hoise-!!🚫
+handleCommand.threadBanned=Group ban hoise..!⛔️\nPlease Owner CYBER ULLASH er shathe contact koro unban er jonno ⚠️
+handleCommand.commandNotExist=━━━━━━━✦━━━━━━━ \n✨ Assalamu Alaikum! 💖🌟\n━━━━━━━✦━━━━━━━\n\nTumar deya command valid na.\nCould it be— \n•—» %1  «—•\nCheck koro input, please!\n━━━━━━━✦━━━━━━━
+handleCommand.commandThreadBanned=Tumar thread e "%1" command use kora jacche na
+handleCommand.commandUserBanned=Tumi "%1" command use korte parba na
+handleCommand.threadNotAllowNSFW=Ei command shudhu Andmi er jonno
+handleCommand.cantGetInfoThread=Thread info pawa jacche na, error: %1
+handleCommand.permssionNotEnough="%1"\n⎯⎯⎯⎯⎯⎯\n✨ Shudhu Maharaja ULLASH ei command use korte parbe.\n✨ Tumi shudhu proja, use kora allowed na 🙂🐸\n"%1"\n⎯⎯⎯⎯⎯⎯
+handleCommand.cantSetMessageReaction=SetMessageReaction e unexpected error, error: %1
+handleCommand.executeCommand=[ %1 ] Command use hoise: %2 by user: %3 at thread: %4 | Args: %5 | Processing time: %6ms
+handleCommand.commandError=Command use korar somoy unexpected error, error: %2
+
+# includes/handle/handleCommandEvent.js
+
+handleCommandEvent.moduleError=Command %1 use korar somoy unexpected error, error: %2
+
+# includes/handle/handleCreateDatabase.js
+
+handleCreateDatabase.newThread=new thread: %1
+handleCreateDatabase.newUser=new user %1
+
+# includes/handle/handleEvent.js
+
+handleEvent.executeEvent=[ %1 ] Event execute hoise: %2 at thread: %3 | Processing time: %4ms
+handleEvent.eventError=Event execute korar somoy error hoise %1, error: %12
+
+# includes/handle/handleReaction.js
+
+handleReaction.missingValue=Response er jonno value missing
+handleReaction.executeError=Response er somoy error hoise, error: %1
+
+# includes/handle/handleReply.js
+
+handleReply.missingValue=Response er jonno value missing
+handleReply.executeError=Response er somoy error hoise, error: %1
+
+# includes/handle/handleSchedule.js
+
+handleSchedule.exectuteError=Module %1 schedule korte giye error hoise, error: %2
+
+# utils/index.js
+
+utils.throwError=ℹ️ [!] Jodi ei command kaj na kore, onno command try koro %1help %2 use er jonno💙🥺
+
+# updater.js
+
+updater.latestVersion=Tumi latest version use korteso
+updater.cantFindVersion=Tumi undefined version (%1) use korteso, package.json check koro
+updater.newVersions=%1 new version update ache, update start kortesi...
+updater.updateSuccess=Update successfully %1
+updater.configChanged=%1 change hoise, config.json abar check koro
+updater.installingPackages=Bot er dependencies install kortesi...
+updater.installSuccess=Dependencies successfully install hoise, restart kore new version use koro
+updater.backupSuccess=Changed files successfully backup hoise, folder e dekho %1
+updater.restartToApply=Restart kore new version apply koro
+updater.skipFile=%1 file er new version ache, kintu tumi ei file skip korecho comment %2 diye
