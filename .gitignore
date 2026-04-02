@@ -1,0 +1,9 @@
+node_modules/
+appstate.json
+config.json
+.vs/
+*.log
+logs/
+temp/
+tmp/
+.cache/
