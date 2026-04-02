@@ -1,7 +1,7 @@
 {
   "name": "jarvis-bot",
   "version": "5.0.0",
-  "description": "Made by Imran Hossain",
+  "description": "Made by SANS FERRARO",
   "main": "Jarvis.js",
   "engines": {
     "node": ">=20.18.1",
@@ -22,18 +22,29 @@
     "messenger",
     "jarvis",
     "jarvis-bot",
-    "imran",
-    "imran-bot",
+    "mql1",
+    "mql1-bot",
     "chatbot",
     "facebook-bot",
     "messenger-bot"
   ],
-  "author": "Imran Hossain",
+  "author": "SANS FERRARO",
   "license": "GPL-3.0",
   "bugs": {
     "url": "https://github.com/fximran/Messenger_Bot/issues"
   },
   "homepage": "https://github.com/fximran/Messenger_Bot",
+  "branding": {
+    "botName": "Jarvis Bot",
+    "ownerName": "SANS FERRARO",
+    "loaderName": "JARVIS LOADED",
+    "stateName": "JarvisState",
+    "teamName": "MQL1 BOT TEAM",
+    "supportContact": "facebook.com/mdimranhossain.mdih123",
+    "subjectName": "user",
+    "mqttTitle": "JARVIS-FCA MQTT CONNECTED",
+    "consoleTag": "jarvis"
+  },
   "dependencies": {
     "@distube/ytdl-core": "^4.13.2",
     "@miraipr0ject/assets": "^1.0.9",

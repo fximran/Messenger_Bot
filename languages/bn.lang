@@ -1,26 +1,26 @@
-# Cyber.js 
+# Cyber.js
 
 Cyber.newVersionDetected=Tumi use korteso version %1, latest version hoilo %2.
 Cyber.errorFormat=Malformed module!
 Cyber.nameExist=Module er name onno module er shathe mil ase!
-Cyber.notFoundLanguage=Module %1 tomer language support kore na
+Cyber.notFoundLanguage=Module %1 tomar language support kore na
 Cyber.notFoundPackage=%2 module er jonno package %1 paoa jacche na, install kortesi...
-Cyber.cantInstallPackage=Package %1 install kora jacche na module %2 jonno, error: %3
-Cyber.loadedPackage=Module %1 er shob package successfully install kora hoise
-Cyber.loadedConfig=Module %1 er config successfully install kora hoise
+Cyber.cantInstallPackage=Package %1 install kora jacche na module %2 er jonno, error: %3
+Cyber.loadedPackage=Module %1 er shob package successfully install hoise
+Cyber.loadedConfig=Module %1 er config successfully install hoise
 Cyber.cantLoadConfig=Module %1 er config install kora jacche na, error: %2
-Cyber.cantOnload=Module %1 er setup launch kora jacche na, error: %1
+Cyber.cantOnload=Module %1 er setup launch kora jacche na, error: %2
 Cyber.successLoadModule=Module %1 successfully install hoise
 Cyber.failLoadModule=Module %1 install kora jacche na, error: %2
 Cyber.finishLoadModule=%1 module commands ebong %2 module events successfully install hoise
-Cyber.foundPathAppstate=Ullashstate successfully paoa hoise
+Cyber.foundPathAppstate=%1 successfully paoa hoise
 Cyber.notFoundPathAppstate=Error! appstate file paoa jacche na, mone hocche file malformed!
 Cyber.checkListGban=Global ban list check kortesi...
-Cyber.banDevice=Tomer device ULLASH theke ban kora hoise, aro info er jonno contact koro facebook m.me/CYBER.ULLASH, jodi unban key thake fill koro
-Cyber.keyNotSameFormat=Wrong format, code e 6 number thakte hobe
+Cyber.banDevice=Tomer device %1 theke ban kora hoise, aro info er jonno contact koro %2
+Cyber.keyNotSameFormat=Wrong format, code e 6 ta digit thakte hobe
 Cyber.codeInputExpired=Tomer code wrong ba outdated
 Cyber.unbanDeviceSuccess=Tomer device unban hoise, please restart kore use koro
-Cyber.userBanned=Tumi ullash e ban kora hoiso jokhon %1, reason: %2. Aro info er jonno contact koro facebook m.me/CYBER.ULLASH
+Cyber.userBanned=Tumi %1 e ban kora hoiso jokhon %2, reason: %3. Aro info er jonno contact koro %4
 Cyber.finishCheckListGban=Global ban list check complete
 Cyber.handleListenError=handleListener e unexpected error hoise, error: %1
 Cyber.warningSourceCode=DETECTED THAT SOURCE CODE ER STRUCTURE CHANGE HOISE, STOP NOW!
@@ -54,14 +54,14 @@ users.needObject=Object thakte hobe
 
 # includes/handle/handleCommand.js
 
-handleCommand.userBanned=Box e ablamir oporad e tore ban kore deya hoise-!!🚫
-handleCommand.threadBanned=Group ban hoise..!⛔️\nPlease Owner CYBER ULLASH er shathe contact koro unban er jonno ⚠️
-handleCommand.commandNotExist=━━━━━━━✦━━━━━━━ \n✨ Assalamu Alaikum! 💖🌟\n━━━━━━━✦━━━━━━━\n\nTumar deya command valid na.\nCould it be— \n•—» %1  «—•\nCheck koro input, please!\n━━━━━━━✦━━━━━━━
+handleCommand.userBanned=Box e ablami korar oporad e tore ban kore deya hoise-!! 🚫
+handleCommand.threadBanned=Group ban hoise..!⛔️\nPlease owner %1 er shathe contact koro unban er jonno ⚠️
+handleCommand.commandNotExist=━━━━━━━✦━━━━━━━\n✨ Assalamu Alaikum! 💖🌟\n━━━━━━━✦━━━━━━━\n\nTumar deya command valid na.\nCould it be—\n•—» %1 «—•\nCheck koro input, please!\n━━━━━━━✦━━━━━━━
 handleCommand.commandThreadBanned=Tumar thread e "%1" command use kora jacche na
 handleCommand.commandUserBanned=Tumi "%1" command use korte parba na
-handleCommand.threadNotAllowNSFW=Ei command shudhu Andmi er jonno
+handleCommand.threadNotAllowNSFW=Ei command shudhu admin er jonno
 handleCommand.cantGetInfoThread=Thread info pawa jacche na, error: %1
-handleCommand.permssionNotEnough="%1"\n⎯⎯⎯⎯⎯⎯\n✨ Shudhu Maharaja ULLASH ei command use korte parbe.\n✨ Tumi shudhu proja, use kora allowed na 🙂🐸\n"%1"\n⎯⎯⎯⎯⎯⎯
+handleCommand.permssionNotEnough="%1"\n⎯⎯⎯⎯⎯⎯\n✨ Shudhu %2 ei command use korte parbe.\n✨ Tumi shudhu %3, use kora allowed na 🙂🐸\n⎯⎯⎯⎯⎯⎯
 handleCommand.cantSetMessageReaction=SetMessageReaction e unexpected error, error: %1
 handleCommand.executeCommand=[ %1 ] Command use hoise: %2 by user: %3 at thread: %4 | Args: %5 | Processing time: %6ms
 handleCommand.commandError=Command use korar somoy unexpected error, error: %2
@@ -72,13 +72,13 @@ handleCommandEvent.moduleError=Command %1 use korar somoy unexpected error, erro
 
 # includes/handle/handleCreateDatabase.js
 
-handleCreateDatabase.newThread=new thread: %1
-handleCreateDatabase.newUser=new user %1
+handleCreateDatabase.newThread=New thread: %1
+handleCreateDatabase.newUser=New user: %1
 
 # includes/handle/handleEvent.js
 
 handleEvent.executeEvent=[ %1 ] Event execute hoise: %2 at thread: %3 | Processing time: %4ms
-handleEvent.eventError=Event execute korar somoy error hoise %1, error: %12
+handleEvent.eventError=Event execute korar somoy error hoise %1, error: %2
 
 # includes/handle/handleReaction.js
 
@@ -96,7 +96,7 @@ handleSchedule.exectuteError=Module %1 schedule korte giye error hoise, error: %
 
 # utils/index.js
 
-utils.throwError=ℹ️ [!] Jodi ei command kaj na kore, onno command try koro %1help %2 use er jonno💙🥺
+utils.throwError=ℹ️ [!] Jodi ei command kaj na kore, onno command try koro. %1help %2 use er jonno.
 
 # updater.js
 
