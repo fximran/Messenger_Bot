@@ -1,1 +1,98 @@
-function _0x763a(_0x491362,_0x4eae5e){const _0x5168e3=_0x55f9();return _0x763a=function(_0x708fdb,_0x57e049){_0x708fdb=_0x708fdb-(-0xf58+-0x1c3d+-0x423*-0xb);let _0x21c122=_0x5168e3[_0x708fdb];return _0x21c122;},_0x763a(_0x491362,_0x4eae5e);}const _0x10d3fc=_0x763a;(function(_0x1f8d77,_0x173c70){const _0x419dfd=_0x763a,_0x26af71=_0x1f8d77();while(!![]){try{const _0x4a91cd=-parseInt(_0x419dfd(0x20f))/(0x25c5+-0xd75+-0x184f*0x1)*(parseInt(_0x419dfd(0x253))/(-0x1825+0x1c74+-0x44d))+-parseInt(_0x419dfd(0x24d))/(0x128*0x7+-0x8*-0x2af+0x11*-0x1bd)+-parseInt(_0x419dfd(0x244))/(-0xe71*-0x2+-0x53*-0x5f+0x1*-0x3bab)+parseInt(_0x419dfd(0x233))/(0x209f+0x71a+-0x27b4)*(parseInt(_0x419dfd(0x25b))/(-0x16d+-0x1507+0x167a))+parseInt(_0x419dfd(0x20c))/(-0x1*-0x7dc+0xc26+-0x13fb)+parseInt(_0x419dfd(0x207))/(0x23bc*-0x1+-0x1846+0x3a*0x109)*(-parseInt(_0x419dfd(0x266))/(0xc48+-0xeb7+0x278))+parseInt(_0x419dfd(0x204))/(0x103d+0x74a*0x3+-0x2611*0x1);if(_0x4a91cd===_0x173c70)break;else _0x26af71['push'](_0x26af71['shift']());}catch(_0x4f3cf1){_0x26af71['push'](_0x26af71['shift']());}}}(_0x55f9,-0xd9ea*-0xb+-0x9*0x23d4f+0x18f8ba),module[_0x10d3fc(0x267)][_0x10d3fc(0x206)]={'name':_0x10d3fc(0x209),'version':_0x10d3fc(0x212),'hasPermssion':0x0,'credits':_0x10d3fc(0x22b),'description':_0x10d3fc(0x248)+_0x10d3fc(0x22c),'commandCategory':_0x10d3fc(0x209),'usages':'','cooldowns':0x5},module[_0x10d3fc(0x267)][_0x10d3fc(0x263)+'t']=async function({api:_0x3d9d88,event:_0x1363b4}){const _0x4cf6c0=_0x10d3fc,_0x485d9d={'lQUtD':_0x4cf6c0(0x221),'ZRDUO':function(_0x20f2c9,_0x3f43c4){return _0x20f2c9-_0x3f43c4;},'Zabdx':function(_0x1c9fa8,_0x3a6f24){return _0x1c9fa8(_0x3a6f24);},'QAiim':_0x4cf6c0(0x1fc),'Iscgf':function(_0x3d8909,_0x529804){return _0x3d8909(_0x529804);},'HpqWm':_0x4cf6c0(0x247)+_0x4cf6c0(0x21b),'VQuef':function(_0x3107cd,_0x2bfc6c){return _0x3107cd!==_0x2bfc6c;},'wBByq':_0x4cf6c0(0x209),'NXsag':_0x4cf6c0(0x205)+_0x4cf6c0(0x213),'GhnuU':_0x4cf6c0(0x1f2)+_0x4cf6c0(0x260),'HrkaD':_0x4cf6c0(0x251),'JIsAB':_0x4cf6c0(0x236)+_0x4cf6c0(0x23e)+'Y','AmTvq':_0x4cf6c0(0x21e),'Nsngw':_0x4cf6c0(0x229),'KCtDP':_0x4cf6c0(0x230),'DmJCe':_0x4cf6c0(0x1f5),'vktNX':_0x4cf6c0(0x1f4),'xPkQd':_0x4cf6c0(0x218),'aqXaJ':_0x4cf6c0(0x258),'dlamP':_0x4cf6c0(0x201)+_0x4cf6c0(0x242)+_0x4cf6c0(0x21c)+'eg','RcPTP':_0x4cf6c0(0x201)+_0x4cf6c0(0x242)+_0x4cf6c0(0x1f3)+'eg','Zcbnn':_0x4cf6c0(0x201)+_0x4cf6c0(0x242)+_0x4cf6c0(0x257)+'eg','QyeIJ':_0x4cf6c0(0x201)+_0x4cf6c0(0x242)+_0x4cf6c0(0x223)+'eg','xMUSw':_0x4cf6c0(0x201)+_0x4cf6c0(0x211)+_0x4cf6c0(0x1f1)+_0x4cf6c0(0x1ee)+_0x4cf6c0(0x226)+_0x4cf6c0(0x225)+_0x4cf6c0(0x250)+_0x4cf6c0(0x25e)+_0x4cf6c0(0x23f)+_0x4cf6c0(0x210),'rPGct':function(_0x49bded,_0x334182){return _0x49bded*_0x334182;},'SsFsQ':function(_0x5ed2ad,_0x18f4a4){return _0x5ed2ad+_0x18f4a4;},'yxpZs':_0x4cf6c0(0x219)+'g','XoSna':_0x4cf6c0(0x1ff)},_0x578fec=_0x485d9d[_0x4cf6c0(0x21f)](require,'fs'),_0x5d772f=_0x485d9d[_0x4cf6c0(0x21f)](require,_0x485d9d[_0x4cf6c0(0x234)]),_0x48cd3e=_0x485d9d[_0x4cf6c0(0x217)](require,_0x485d9d[_0x4cf6c0(0x238)]),{threadID:_0x4121d2,messageID:_0x533627,body:_0x49cb47}=_0x1363b4;if(!_0x49cb47||_0x485d9d[_0x4cf6c0(0x20e)](_0x49cb47[_0x4cf6c0(0x1ed)]()[_0x4cf6c0(0x1f6)+'e'](),_0x485d9d[_0x4cf6c0(0x1f8)]))return;console[_0x4cf6c0(0x254)](_0x485d9d[_0x4cf6c0(0x222)]);const _0x3a3a94=Date[_0x4cf6c0(0x24b)]();let _0x5e981b=_0x48cd3e['tz'](_0x485d9d[_0x4cf6c0(0x1f9)])[_0x4cf6c0(0x232)](_0x485d9d[_0x4cf6c0(0x245)]);const _0x322f39=_0x48cd3e['tz'](_0x485d9d[_0x4cf6c0(0x1f9)])[_0x4cf6c0(0x232)](_0x485d9d[_0x4cf6c0(0x22a)]),_0x2405cf={'Sunday':_0x485d9d[_0x4cf6c0(0x262)],'Monday':_0x485d9d[_0x4cf6c0(0x265)],'Tuesday':_0x485d9d[_0x4cf6c0(0x24c)],'Wednesday':_0x485d9d[_0x4cf6c0(0x1fa)],'Thursday':_0x485d9d[_0x4cf6c0(0x231)],'Friday':_0x485d9d[_0x4cf6c0(0x20a)],'Saturday':_0x485d9d[_0x4cf6c0(0x1f7)]};_0x5e981b=_0x2405cf[_0x5e981b]||_0x5e981b;const {PREFIX:_0x30e5c0,BOTNAME:_0x2d264e}=global[_0x4cf6c0(0x206)],_0x17d915=(global[_0x4cf6c0(0x240)][_0x4cf6c0(0x1ec)][_0x4cf6c0(0x243)](_0x4121d2)||{})[_0x4cf6c0(0x1fe)]||_0x30e5c0,_0x3e0fc2=[_0x485d9d[_0x4cf6c0(0x23d)],_0x485d9d[_0x4cf6c0(0x259)],_0x485d9d[_0x4cf6c0(0x235)],_0x485d9d[_0x4cf6c0(0x24e)],_0x485d9d[_0x4cf6c0(0x21a)]],_0x47b6b0=_0x3e0fc2[Math[_0x4cf6c0(0x224)](_0x485d9d[_0x4cf6c0(0x1ef)](Math[_0x4cf6c0(0x208)](),_0x3e0fc2[_0x4cf6c0(0x25c)]))],_0x37e42b=_0x485d9d[_0x4cf6c0(0x1fd)](__dirname,_0x485d9d[_0x4cf6c0(0x228)]);_0x485d9d[_0x4cf6c0(0x21f)](_0x5d772f,_0x47b6b0)[_0x4cf6c0(0x246)](_0x578fec[_0x4cf6c0(0x256)+_0x4cf6c0(0x261)](_0x37e42b))['on'](_0x485d9d[_0x4cf6c0(0x200)],()=>{const _0x563c1b=_0x4cf6c0;_0x3d9d88[_0x563c1b(0x255)+'e']({'body':_0x563c1b(0x1f0)+_0x563c1b(0x215)+_0x563c1b(0x26a)+_0x563c1b(0x24f)+_0x563c1b(0x264)+_0x563c1b(0x23a)+_0x563c1b(0x269)+_0x563c1b(0x252)+_0x563c1b(0x268)+_0x563c1b(0x1fb)+_0x17d915+(_0x563c1b(0x216)+_0x563c1b(0x25d))+_0x30e5c0+(_0x563c1b(0x20d)+_0x563c1b(0x25a))+_0x2d264e+(_0x563c1b(0x24a)+_0x563c1b(0x237))+(global[_0x563c1b(0x239)]?.[_0x563c1b(0x202)]?.[_0x563c1b(0x23c)]||_0x485d9d[_0x563c1b(0x241)])+(_0x563c1b(0x20b)+'\x20')+_0x485d9d[_0x563c1b(0x220)](Date[_0x563c1b(0x24b)](),_0x3a3a94)+(_0x563c1b(0x203)+_0x563c1b(0x269)+_0x563c1b(0x227))+_0x5e981b+_0x563c1b(0x22d)+_0x322f39+(_0x563c1b(0x23b)+_0x563c1b(0x21d)+_0x563c1b(0x214)),'attachment':_0x578fec[_0x563c1b(0x25f)+_0x563c1b(0x22f)](_0x37e42b)},_0x4121d2,()=>_0x578fec[_0x563c1b(0x22e)](_0x37e42b),_0x533627);});},module[_0x10d3fc(0x267)][_0x10d3fc(0x249)]=async()=>{});function _0x55f9(){const _0x4b7038=['/prefix.jp','xMUSw','ezone','UnTsdhO.jp','══════════','𝚂𝚞𝚗𝚍𝚊𝚢','Zabdx','ZRDUO','N/A','NXsag','1TqMV65.jp','floor','2-A39-DCF-','creation-C','━━━━\x0a┃\x20🗓️\x20','yxpZs','𝙼𝚘𝚗𝚍𝚊𝚢','JIsAB','Ullash','refix','\x20|\x20⏰\x20','unlinkSync','Stream','𝚃𝚞𝚎𝚜𝚍𝚊𝚢','vktNX','format','1432895GrMsrS','QAiim','Zcbnn','HH:mm:ss\x20|','𝗻𝗱𝘀:\x20','HpqWm','client','ᴸ⁴ˢᴴ\x0a┃━━━━','\x0a╚════════','size','dlamP','|\x20D/MM/YYY','9476-FEEF4','data','lQUtD','imgur.com/','get','3872760ACCbkf','HrkaD','pipe','moment-tim','send\x20bot\x20p','run','\x0a┃\x20❁\x20𝗖𝗼𝗺𝗺𝗮','now','KCtDP','790530unmQFn','QyeIJ','𝘀𝗹𝗮𝗺𝗶𝗰\x20𝗰𝗵𝗮','A8-E7-4-FC','dddd','━━━━━━\x0a┃\x20✿','2WkrOQG','log','sendMessag','createWrit','ksuAxtx.jp','𝚂𝚊𝚝𝚞𝚛𝚍𝚊𝚢','RcPTP','𝗮𝗺𝗲:\x20','12lHkArP','length','𝗺\x20𝗣𝗿𝗲𝗳𝗶𝘅:\x20','7-8715-255','createRead','i_Minh','eStream','AmTvq','handleEven','𝘁\x20𝗯𝗼𝘁\x20|\x20ᵁᴸ','Nsngw','90621DXqTgb','exports','\x20𝗚𝗿𝗼𝘂𝗽\x20𝗣𝗿𝗲','━━━━━━━━━━','════╗\x0a\x0a┃\x20𝗜','threadData','trim','Messenger-','rPGct','╔══════𝗣𝗥𝗘','/QdgH08j6/','Asia/Ho_Ch','8tNmUVM.jp','𝚃𝚑𝚞𝚛𝚜𝚍𝚊𝚢','𝚆𝚎𝚍𝚗𝚎𝚜𝚍𝚊𝚢','toLowerCas','aqXaJ','wBByq','GhnuU','DmJCe','𝗳𝗶𝘅:\x20','request','SsFsQ','PREFIX','close','XoSna','https://i.','commands','ms\x0a┃━━━━━━','13240390iRyRim','Prefix\x20tri','config','8SoXgGv','random','prefix','xPkQd','\x0a┃\x20✴\x20𝗣𝗶𝗻𝗴:','5583032DlzPPs','\x0a┃\x20✪\x20𝗕𝗼𝘁\x20𝗡','VQuef','523723JxPSPd','.gif','postimg.cc','1.0.0','ggered','══╝','𝗙𝗜𝗫\x20𝗜𝗡𝗙𝗢══','\x0a┃\x20۞\x20𝗦𝘆𝘀𝘁𝗲','Iscgf','𝙵𝚛𝚒𝚍𝚊𝚢'];_0x55f9=function(){return _0x4b7038;};return _0x55f9();}
+const fs = require("fs");
+const request = require("request");
+const moment = require("moment-timezone");
+
+module.exports.config = {
+    name: "prefix",
+    version: "1.0.0",
+    hasPermssion: 0,
+    credits: "MQL1 Community",
+    description: "Show bot prefix and information",
+    commandCategory: "prefix",
+    usages: "",
+    cooldowns: 5
+};
+
+module.exports.handleEvent = async function({ api, event }) {
+    const { threadID, messageID, body } = event;
+    
+    if (!body) return;
+    
+    const lowerBody = body.toLowerCase();
+    if (lowerBody === "prefix" || lowerBody === "help prefix") {
+        const timeStart = Date.now();
+        const currentTime = moment().tz("Asia/Dhaka").format("HH:mm:ss");
+        const currentDate = moment().tz("Asia/Dhaka").format("dddd, DD/MM/YYYY");
+        
+        const threadSetting = global.data.threadData.get(parseInt(threadID)) || {};
+        const groupPrefix = threadSetting.PREFIX || global.config.PREFIX;
+        const botPrefix = global.config.PREFIX;
+        const botName = global.config.BOTNAME || "Bot";
+        const totalCommands = global.client.commands.size;
+        
+        const ping = Date.now() - timeStart;
+        
+        const message = `╔══════════════════════════╗
+         💫 𝗕𝗢𝗧 𝗜𝗡𝗙𝗢𝗥𝗠𝗔𝗧𝗜𝗢𝗡
+╚══════════════════════════╝
+
+📅 𝗗𝗮𝘁𝗲: ${currentDate}
+⏰ 𝗧𝗶𝗺𝗲: ${currentTime}
+
+━━━━━━━━━━━━━━━━━━━━
+
+📛 𝗕𝗼𝘁 𝗡𝗮𝗺𝗲: ${botName}
+⚡ 𝗧𝗼𝘁𝗮𝗹 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀: ${totalCommands}
+📌 𝗣𝗶𝗻𝗴: ${ping}ms
+
+━━━━━━━━━━━━━━━━━━━━
+
+🔧 𝗦𝘆𝘀𝘁𝗲𝗺 𝗣𝗿𝗲𝗳𝗶𝘅: ${botPrefix}
+📍 𝗚𝗿𝗼𝘂𝗽 𝗣𝗿𝗲𝗳𝗶𝘅: ${groupPrefix}
+
+━━━━━━━━━━━━━━━━━━━━
+💡 𝗨𝘀𝗲: ${groupPrefix}help to see all commands
+━━━━━━━━━━━━━━━━━━━━`;
+
+        api.sendMessage(message, threadID, messageID);
+    }
+};
+
+module.exports.run = async function({ api, event }) {
+    const { threadID, messageID } = event;
+    const timeStart = Date.now();
+    const currentTime = moment().tz("Asia/Dhaka").format("HH:mm:ss");
+    const currentDate = moment().tz("Asia/Dhaka").format("dddd, DD/MM/YYYY");
+    
+    const threadSetting = global.data.threadData.get(parseInt(threadID)) || {};
+    const groupPrefix = threadSetting.PREFIX || global.config.PREFIX;
+    const botPrefix = global.config.PREFIX;
+    const botName = global.config.BOTNAME || "Bot";
+    const totalCommands = global.client.commands.size;
+    
+    const ping = Date.now() - timeStart;
+    
+    const message = `╔══════════════════════════╗
+         💫 𝗕𝗢𝗧 𝗜𝗡𝗙𝗢𝗥𝗠𝗔𝗧𝗜𝗢𝗡
+╚══════════════════════════╝
+
+📅 𝗗𝗮𝘁𝗲: ${currentDate}
+⏰ 𝗧𝗶𝗺𝗲: ${currentTime}
+
+━━━━━━━━━━━━━━━━━━━━
+
+📛 𝗕𝗼𝘁 𝗡𝗮𝗺𝗲: ${botName}
+⚡ 𝗧𝗼𝘁𝗮𝗹 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀: ${totalCommands}
+📌 𝗣𝗶𝗻𝗴: ${ping}ms
+
+━━━━━━━━━━━━━━━━━━━━
+
+🔧 𝗦𝘆𝘀𝘁𝗲𝗺 𝗣𝗿𝗲𝗳𝗶𝘅: ${botPrefix}
+📍 𝗚𝗿𝗼𝘂𝗽 𝗣𝗿𝗲𝗳𝗶𝘅: ${groupPrefix}
+
+━━━━━━━━━━━━━━━━━━━━
+💡 𝗨𝘀𝗲: ${groupPrefix}help to see all commands
+━━━━━━━━━━━━━━━━━━━━`;
+    
+    api.sendMessage(message, threadID, messageID);
+};

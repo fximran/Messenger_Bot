@@ -26,18 +26,15 @@ const colors = [
     '#00FFFF', '#00CCFF', '#0099FF', '#0066FF', '#0033FF'
 ];
 
-// র্যান্ডম রঙ
 function getRandomColor() {
     return colors[Math.floor(Math.random() * colors.length)];
 }
 
 module.exports.handleEvent = async function({ api, event, Users }) {
-    const { threadID, messageID, senderID, body, attachments } = event;
+    const { threadID, senderID, body, attachments } = event;
     
-    // বট নিজের মেসেজ ইগনোর
     if (senderID == api.getCurrentUserID()) return;
     
-    // কনফিগ চেক (অন/অফ)
     const threadSetting = global.data.threadData.get(parseInt(threadID)) || {};
     if (typeof threadSetting["console"] != "undefined" && threadSetting["console"] == false) return;
     
@@ -47,30 +44,25 @@ module.exports.handleEvent = async function({ api, event, Users }) {
         const userName = await Users.getNameUser(senderID);
         const content = body || (attachments.length > 0 ? `${attachments.length} attachment(s)` : "No content");
         
-        // র্যান্ডম রঙ
         const color1 = getRandomColor();
         const color2 = getRandomColor();
         const color3 = getRandomColor();
         const color4 = getRandomColor();
-        const color5 = getRandomColor();
         
-        const time = moment.tz("Asia/Dhaka").format("dddd, MMMM D, YYYY hh:mm:ss A");
+        const time = moment.tz("Asia/Dhaka").format("DD/MM/YYYY hh:mm:ss A");
         
-        // MQL1 COMMUNITY ফর্মেট (সেইম স্টাইলে)
-        const separator = chalk.hex(color1)("◆━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━◆");
-        const communityLine = chalk.hex(color2)("                          ◈◇ 𝐌𝐐𝐋𝟏 𝐂𝐎𝐌𝐌𝐔𝐍𝐈𝐓𝐘 ◇◈                          ");
-        
-        // কনসোল আউটপুট
-        console.log(separator);
-        console.log(chalk.hex(color3)("[💓]→ Group name: ") + chalk.hex(color4)(threadName));
-        console.log(chalk.hex(color3)("[🔎]→ Group ID: ") + chalk.hex(color4)(threadID));
-        console.log(chalk.hex(color3)("[🔱]→ User name: ") + chalk.hex(color4)(userName));
-        console.log(chalk.hex(color3)("[📝]→ User ID: ") + chalk.hex(color4)(senderID));
-        console.log(chalk.hex(color3)("[📩]→ Content: ") + chalk.hex(color4)(content));
-        console.log(chalk.hex(color5)(`[ ${time} ]`));
-        console.log(communityLine);
-        console.log(separator);
-        console.log("\n");
+        console.log(chalk.hex(color1)("══════════════════════════════════════════════════════════════════════════"));
+        console.log(chalk.hex(color2)("💬 MESSAGE LOG"));
+        console.log(chalk.hex(color1)("══════════════════════════════════════════════════════════════════════════"));
+        console.log(chalk.hex(color3)(`📁 Group : ${threadName}`));
+        console.log(chalk.hex(color3)(`🆔 Group ID : ${threadID}`));
+        console.log(chalk.hex(color3)(`👤 User : ${userName}`));
+        console.log(chalk.hex(color3)(`🆔 User ID : ${senderID}`));
+        console.log(chalk.hex(color3)(`💬 Content : ${content}`));
+        console.log(chalk.hex(color4)(`⏰ Time : ${time}`));
+        console.log(chalk.hex(color2)(`🏷️ MQL1 COMMUNITY`));
+        console.log(chalk.hex(color1)("══════════════════════════════════════════════════════════════════════════"));
+        console.log("");
         
     } catch (error) {
         console.log(chalk.red("[ERROR]"), error);
