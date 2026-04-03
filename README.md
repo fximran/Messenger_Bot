@@ -32,7 +32,7 @@ yarn install
 ## Start Bot
 
 ```bash
-node Ullash.js
+node Jarvis.js
 ```
 
 ## Important
