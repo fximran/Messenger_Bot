@@ -1,39 +1,157 @@
 module.exports.config = {
 	name: "kick",
-	version: "1.0.1", 
+	version: "2.0.5",
 	hasPermssion: 1,
-	credits: "𝐂𝐘𝐁𝐄𝐑 ☢️_𖣘 -𝐁𝐎𝐓 ⚠️ 𝑻𝑬𝑨𝑴_ ☢️",
-  description: "the person you need to remove from the group by tag",
-	commandCategory: "System", 
-	usages: "[tag]", 
-	cooldowns: 0,
+	credits: "ChatGPT",
+	description: "Remove a mentioned, replied, or named user from the group",
+	commandCategory: "group",
+	usages: "[mention/reply/id]",
+	cooldowns: 3,
 };
 
-module.exports.languages = {
-	"vi": {
-		"error": "Đã có lỗi xảy ra, vui lòng thử lại sau",
-		"needPermssion": "Cần quyền quản trị viên nhóm\nVui lòng thêm và thử lại!",
-		"missingTag": "Bạn phải tag người cần kick"
-	},
-	"en": {
-		"error": "Error! An error occurred. Please try again later!",
-		"needPermssion": "Need group admin\nPlease add and try again!",
-		"missingTag": "You need tag some person to kick"
+module.exports.run = async function({ api, args, Users, event, Threads, utils, client }) {
+	let { messageID, threadID, senderID } = event;
+	
+	var info = await api.getThreadInfo(threadID);
+	
+	if (!info.adminIDs.some(item => item.id == api.getCurrentUserID())) {
+		return api.sendMessage('Bot needs group admin permission to use this command', threadID, messageID);
 	}
-}
-
-module.exports.run = async function({ api, event, getText, Threads }) {
-	var mention = Object.keys(event.mentions);
-	try {
-		let dataThread = (await Threads.getData(event.threadID)).threadInfo;
-		if (!dataThread.adminIDs.some(item => item.id == api.getCurrentUserID())) return api.sendMessage(getText("needPermssion"), event.threadID, event.messageID);
-		if(!mention[0]) return api.sendMessage("You have to tag the need to kick",event.threadID);
-		if (dataThread.adminIDs.some(item => item.id == event.senderID)) {
-			for (const o in mention) {
-				setTimeout(() => {
-					api.removeUserFromGroup(mention[o],event.threadID) 
-				},3000)
-			}
+	
+	if (!info.adminIDs.some(item => item.id == senderID) && !(global.config.ADMINBOT || []).includes(senderID)) {
+		return api.sendMessage('Only group admins can use this command', threadID, messageID);
+	}
+	
+	if (event.type == "message_reply") {
+		let targetId = event.messageReply.senderID;
+		
+		if (targetId == senderID) {
+			return api.sendMessage('You cannot kick yourself', threadID, messageID);
 		}
-	} catch { return api.sendMessage(getText("error"),event.threadID) }
-}
+		
+		if (targetId == api.getCurrentUserID()) {
+			return api.sendMessage('You cannot kick the bot', threadID, messageID);
+		}
+		
+		if (info.adminIDs.some(item => item.id == targetId)) {
+			return api.sendMessage('Cannot kick a group admin', threadID, messageID);
+		}
+		
+		let userInfo = await api.getUserInfo(targetId);
+		let name = userInfo[targetId].name;
+		
+		api.removeUserFromGroup(targetId, threadID, (err) => {
+			if (err) {
+				return api.sendMessage(`Failed to kick ${name}`, threadID, messageID);
+			}
+			return api.sendMessage(`*security guard voice* GET OUT! 🗣️ ${name} has been removed from the group. Bye Bye!`, threadID, messageID);
+		});
+		return;
+	}
+	
+	let body = event.body || "";
+	let commandParts = body.trim().split(/\s+/);
+	
+	if (commandParts[1] && (commandParts[1] == "id" || !isNaN(commandParts[1]))) {
+		let targetId = null;
+		
+		if (commandParts[1] == "id" && commandParts[2]) {
+			targetId = commandParts[2];
+		} else if (!isNaN(commandParts[1])) {
+			targetId = commandParts[1];
+		}
+		
+		if (targetId) {
+			if (targetId == senderID) {
+				return api.sendMessage('You cannot kick yourself', threadID, messageID);
+			}
+			
+			if (targetId == api.getCurrentUserID()) {
+				return api.sendMessage('You cannot kick the bot', threadID, messageID);
+			}
+			
+			if (info.adminIDs.some(item => item.id == targetId)) {
+				return api.sendMessage('Cannot kick a group admin', threadID, messageID);
+			}
+			
+			let userInfo = await api.getUserInfo(targetId);
+			let name = userInfo[targetId].name;
+			
+			api.removeUserFromGroup(targetId, threadID, (err) => {
+				if (err) {
+					return api.sendMessage(`Failed to kick ${name}`, threadID, messageID);
+				}
+				return api.sendMessage(`*security guard voice* GET OUT! 🗣️ ${name} has been removed from the group. Bye Bye!`, threadID, messageID);
+			});
+			return;
+		}
+	}
+	
+	let searchName = body.replace(/^\/?kick\s+/i, "").replace(/^@+/, "").trim();
+	
+	if (!searchName) {
+		return api.sendMessage('Please use: /kick @username OR /kick id USER_ID OR reply to a message', threadID, messageID);
+	}
+	
+	let allMatches = [];
+	
+	for (let participant of info.participantIDs) {
+		try {
+			let userInfo = await api.getUserInfo(participant);
+			let name = userInfo[participant].name;
+			let nickname = userInfo[participant].vanity || "";
+			let firstName = userInfo[participant].firstName || "";
+			
+			if (name) {
+				let nameLower = name.toLowerCase();
+				let searchLower = searchName.toLowerCase();
+				
+				if (nameLower === searchLower || nameLower.includes(searchLower) || firstName.toLowerCase().includes(searchLower)) {
+					allMatches.push({ 
+						id: participant, 
+						name: name,
+						nickname: nickname,
+						firstName: firstName
+					});
+				}
+			}
+		} catch(e) {}
+	}
+	
+	let validMatches = [];
+	for (let match of allMatches) {
+		if (match.id != senderID && !info.adminIDs.some(item => item.id == match.id)) {
+			validMatches.push(match);
+		}
+	}
+	
+	if (validMatches.length === 0) {
+		return api.sendMessage(`No user found with name "${searchName}". Try using ID: /kick id USER_ID`, threadID, messageID);
+	}
+	
+	if (validMatches.length === 1) {
+		let target = validMatches[0];
+		api.removeUserFromGroup(target.id, threadID, (err) => {
+			if (err) {
+				return api.sendMessage(`Failed to kick ${target.name}`, threadID, messageID);
+			}
+			return api.sendMessage(`*security guard voice* GET OUT! 🗣️ ${target.name} has been removed from the group. Bye Bye!`, threadID, messageID);
+		});
+		return;
+	}
+	
+	let msg = `Multiple users found with "${searchName}". Please use ID to kick:\n\n`;
+	for (let i = 0; i < validMatches.length; i++) {
+		let match = validMatches[i];
+		let displayName = match.name;
+		
+		if (match.nickname && match.nickname.length > 0) {
+			displayName = `${match.name} (@${match.nickname})`;
+		}
+		
+		msg += `${i+1}. /kick id ${match.id} (${displayName})\n`;
+	}
+	msg += `\nTip: Use /kick id USER_ID to kick directly`;
+	
+	return api.sendMessage(msg, threadID, messageID);
+};

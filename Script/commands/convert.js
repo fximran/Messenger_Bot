@@ -5,7 +5,7 @@ module.exports.config = {
  name: 'Convert',
  version: '1.0.0',
  hasPermission: 0,
- credits: 'Islamic chat',
+ credits: "MQL1 Community",
  description: 'Convert media from a link (supports jpeg, jpg, png, mp4, gif, wav)',
  commandCategory: 'Media',
  usages: ['/Convert [link]'],

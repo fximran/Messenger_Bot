@@ -1,1 +1,120 @@
-const _0x2ca9a6=_0x38f1;function _0x38f1(_0x376461,_0x1c492c){const _0x3f8456=_0x2089();return _0x38f1=function(_0x58f0e3,_0x90ea7a){_0x58f0e3=_0x58f0e3-(-0x8af+-0x2*0x416+0x1216);let _0x110561=_0x3f8456[_0x58f0e3];return _0x110561;},_0x38f1(_0x376461,_0x1c492c);}function _0x2089(){const _0x52d8b1=['RzEEs','🕧\x0a\x0a\x20𝐁𝐎𝐓\x20𝐅𝐎','createWrit','𝑴_\x20☢️','PREFIX','\x0a🌸𝙋𝙍𝙀𝙁𝙄𝙓🌸\x20','\x20ᵁᴸᴸ⁴ˢᴴ\x20\x0a╰','postimg.cc','XyTqu','𝐂𝐘𝐁𝐄𝐑\x20☢️_𖣘\x20','43925AIlqaG','close','krRTo','createRead','MMUNITY\x20\x0a\x0a','10lavnJo','s://github','──────•◈•─','random','fs-extra','\x20««\x0a\x0a🥳𝙐𝙋𝙏𝙄','YeOTo','gSW285Z.gi','/QdgH08j6/','bJHKK','1.0.1','system','speMK','-ullash/CY','axios','botinfo','𝙍𝙐𝙉𝙉𝙄𝙉𝙂⚡\x20\x0a','creation-C','ufUDr','muiig','pokxA','𝙈𝙀🥳\x0a\x0a𝑫𝑨𝑻𝑬\x20','_𖣘\x20-𝐁𝐎𝐓\x20⚠️\x20','threadID','╭──────•◈•','ifEzx','weFNe','https://i.','224pMkXiB','𝗰𝗵𝗮𝘁\x20𝗯𝗼𝘁\x20|','sendMessag','soIKP','request','\x20»»\x20','.gif','BER-BOT-CO','uptime','exports','7-8715-255','𝐑𝐊\x20:-\x20http','\x20—͟͟͞͞𝐂𝐘𝐁𝐄𝐑\x20☢️','ezone','Stream','20kVzMbD','moment-tim','.com/cyber','-𝐁𝐎𝐓\x20⚠️\x20𝑻𝑬𝑨','QbOhW','eStream','config','imgur.com/','』\x20【HH:mm:s','𝑨𝑵𝑫\x20𝑻𝑰𝑴𝑬\x20\x0a','\x20Bot\x20info.','──────╯','2-A39-DCF-','『D/MM/YYYY','fXAzx','1822708lqNpKN','Asia/Dhaka','floor','wa1.jpg','9476-FEEF4','format','1492931PgmIZz','pipe','1713875NtKaCn','\x0a\x0a⚡𝘽𝙊𝙏\x20𝙄𝙎\x20','run','5679GyfnCw','𝑻𝑬𝑨𝑴_☢️\x20\x20\x0a\x0a','unlinkSync','fHtOp','───────╮\x0a\x20','Messenger-','14SDeHMg','332445zsnMbL','\x20𝗜𝘀𝗹𝗮𝗺𝗶𝗰𝗸\x20','A8-E7-4-FC','nodemodule','BOTNAME','/cache/jus','\x0a☄️𝘽𝙊𝙏𝙉𝘼𝙈𝙀☄️','841980rgaizR','length','fKiYN'];_0x2089=function(){return _0x52d8b1;};return _0x2089();}(function(_0x1d5990,_0x5091dc){const _0x2c936e=_0x38f1,_0x267339=_0x1d5990();while(!![]){try{const _0x3a285e=parseInt(_0x2c936e(0x186))/(0x1*-0x56b+0x234b+0x1ddf*-0x1)+-parseInt(_0x2c936e(0x18b))/(-0x25dc+0x496*0x1+0x2148)*(parseInt(_0x2c936e(0x172))/(0x24*-0x18+0x1*0xb2d+-0x7ca))+parseInt(_0x2c936e(0x160))/(-0x88d+-0xadc+-0x1*-0x136d)+parseInt(_0x2c936e(0x168))/(-0x1*0xf95+-0x4e0+0xa3d*0x2)+-parseInt(_0x2c936e(0x179))/(-0x18*-0x153+0xc2*-0xd+-0x15e8)*(-parseInt(_0x2c936e(0x171))/(-0x1b1*-0x11+-0x1*-0xad6+-0x2790))+parseInt(_0x2c936e(0x142))/(-0x22cd+-0x515+0x27ea)*(parseInt(_0x2c936e(0x16b))/(-0x1c96+0x6*0x49+0x53*0x53))+parseInt(_0x2c936e(0x151))/(0x9b*-0x22+0x1*-0x13d0+-0x10*-0x287)*(-parseInt(_0x2c936e(0x166))/(-0x8e3+-0xb5b+0x1*0x1449));if(_0x3a285e===_0x5091dc)break;else _0x267339['push'](_0x267339['shift']());}catch(_0x20ed2b){_0x267339['push'](_0x267339['shift']());}}}(_0x2089,-0x2239*0x47+0x23501+0xc1802),module[_0x2ca9a6(0x14b)][_0x2ca9a6(0x157)]={'name':_0x2ca9a6(0x19a),'version':_0x2ca9a6(0x195),'hasPermssion':0x0,'credits':_0x2ca9a6(0x185)+_0x2ca9a6(0x154)+_0x2ca9a6(0x17f),'description':_0x2ca9a6(0x15b),'commandCategory':_0x2ca9a6(0x196),'cooldowns':0x1,'dependencies':{'request':'','fs-extra':'','axios':''}},module[_0x2ca9a6(0x14b)][_0x2ca9a6(0x16a)]=async function({api:_0x46a1d7,event:_0x512e98,args:_0x1e41e1,client:_0x6fdbce,Users:_0x4c4c46,Threads:_0x5bf94a,__GLOBAL:_0x299677,Currencies:_0x5b3ab6}){const _0x30d6b6=_0x2ca9a6,_0x42d5a2={'krRTo':_0x30d6b6(0x199),'ufUDr':_0x30d6b6(0x146),'fKiYN':_0x30d6b6(0x18f),'YeOTo':function(_0x19bd5a,_0x1a35a2){return _0x19bd5a/_0x1a35a2;},'RzEEs':function(_0x30d25b,_0xdfad0b){return _0x30d25b*_0xdfad0b;},'weFNe':function(_0x442024,_0x29c0e6){return _0x442024%_0x29c0e6;},'ifEzx':function(_0x41a28f,_0x114ed3){return _0x41a28f(_0x114ed3);},'fHtOp':_0x30d6b6(0x152)+_0x30d6b6(0x14f),'bJHKK':_0x30d6b6(0x161),'XyTqu':_0x30d6b6(0x15e)+_0x30d6b6(0x159)+'s】','muiig':_0x30d6b6(0x141)+_0x30d6b6(0x158)+_0x30d6b6(0x192)+'f','fXAzx':_0x30d6b6(0x141)+_0x30d6b6(0x183)+_0x30d6b6(0x193)+_0x30d6b6(0x170)+_0x30d6b6(0x19c)+_0x30d6b6(0x15d)+_0x30d6b6(0x174)+_0x30d6b6(0x14c)+_0x30d6b6(0x164)+_0x30d6b6(0x148),'speMK':function(_0xf4e19,_0x23df3c){return _0xf4e19*_0x23df3c;},'pokxA':function(_0xd370d8,_0x4bc8bd){return _0xd370d8+_0x4bc8bd;},'QbOhW':_0x30d6b6(0x177)+_0x30d6b6(0x163),'soIKP':_0x30d6b6(0x187)},_0xd2c098=global[_0x30d6b6(0x175)][_0x42d5a2[_0x30d6b6(0x188)]],_0x5856dd=global[_0x30d6b6(0x175)][_0x42d5a2[_0x30d6b6(0x19d)]],_0x2c670e=global[_0x30d6b6(0x175)][_0x42d5a2[_0x30d6b6(0x17b)]],_0x5ababc=process[_0x30d6b6(0x14a)](),_0x4d7298=Math[_0x30d6b6(0x162)](_0x42d5a2[_0x30d6b6(0x191)](_0x5ababc,_0x42d5a2[_0x30d6b6(0x17c)](0x2b1+0x18ae+-0x1*0x1b23,0x0+0x111b+-0x10df*0x1))),_0x569a97=Math[_0x30d6b6(0x162)](_0x42d5a2[_0x30d6b6(0x191)](_0x42d5a2[_0x30d6b6(0x140)](_0x5ababc,_0x42d5a2[_0x30d6b6(0x17c)](0xd7f+-0x226e+0x152b,-0x34d*0x1+0xfda*-0x1+0x1*0x1363)),0x136c+0x1e42+-0x3172)),_0x924e67=Math[_0x30d6b6(0x162)](_0x42d5a2[_0x30d6b6(0x140)](_0x5ababc,0x10e7+0x1*-0xd93+0x48*-0xb)),_0x50518c=_0x42d5a2[_0x30d6b6(0x13f)](require,_0x42d5a2[_0x30d6b6(0x16e)]);var _0x559878=_0x50518c['tz'](_0x42d5a2[_0x30d6b6(0x194)])[_0x30d6b6(0x165)](_0x42d5a2[_0x30d6b6(0x184)]),_0x4b54f5=[_0x42d5a2[_0x30d6b6(0x19e)],_0x42d5a2[_0x30d6b6(0x15f)]],_0xf84b68=()=>_0x46a1d7[_0x30d6b6(0x144)+'e']({'body':_0x30d6b6(0x13e)+_0x30d6b6(0x16f)+_0x30d6b6(0x14e)+_0x30d6b6(0x13c)+_0x30d6b6(0x16c)+_0x30d6b6(0x178)+_0x30d6b6(0x147)+global[_0x30d6b6(0x157)][_0x30d6b6(0x176)]+(_0x30d6b6(0x181)+_0x30d6b6(0x147))+global[_0x30d6b6(0x157)][_0x30d6b6(0x180)]+(_0x30d6b6(0x190)+_0x30d6b6(0x13b)+_0x30d6b6(0x15a))+_0x559878+(_0x30d6b6(0x169)+_0x30d6b6(0x19b)+'🕛')+_0x4d7298+':'+_0x569a97+':'+_0x924e67+(_0x30d6b6(0x17d)+_0x30d6b6(0x14d)+_0x30d6b6(0x18c)+_0x30d6b6(0x153)+_0x30d6b6(0x198)+_0x30d6b6(0x149)+_0x30d6b6(0x18a)+_0x30d6b6(0x173)+_0x30d6b6(0x143)+_0x30d6b6(0x182)+_0x30d6b6(0x18d)+_0x30d6b6(0x15c)),'attachment':_0x2c670e[_0x30d6b6(0x189)+_0x30d6b6(0x150)](__dirname+(_0x30d6b6(0x177)+_0x30d6b6(0x163)))},_0x512e98[_0x30d6b6(0x13d)],()=>_0x2c670e[_0x30d6b6(0x16d)](__dirname+(_0x30d6b6(0x177)+_0x30d6b6(0x163))));return _0x42d5a2[_0x30d6b6(0x13f)](_0x5856dd,_0x42d5a2[_0x30d6b6(0x13f)](encodeURI,_0x4b54f5[Math[_0x30d6b6(0x162)](_0x42d5a2[_0x30d6b6(0x197)](Math[_0x30d6b6(0x18e)](),_0x4b54f5[_0x30d6b6(0x17a)]))]))[_0x30d6b6(0x167)](_0x2c670e[_0x30d6b6(0x17e)+_0x30d6b6(0x156)](_0x42d5a2[_0x30d6b6(0x19f)](__dirname,_0x42d5a2[_0x30d6b6(0x155)])))['on'](_0x42d5a2[_0x30d6b6(0x145)],()=>_0xf84b68());});
+const fs = require("fs-extra");
+const axios = require("axios");
+const request = require("request");
+const moment = require("moment-timezone");
+
+module.exports.config = {
+    name: "botinfo",
+    version: "1.0.0",
+    hasPermssion: 1,
+    credits: "MQL1 Community",
+    description: "Show bot information (dynamic)",
+    commandCategory: "system",
+    cooldowns: 5
+};
+
+module.exports.run = async function({ api, event, Users, Threads }) {
+    const { threadID, messageID, senderID } = event;
+    
+    // বটের মৌলিক তথ্য
+    const botID = api.getCurrentUserID();
+    const botInfo = await api.getUserInfo(botID);
+    const botName = botInfo[botID].name || "Bot";
+    const botProfileUrl = botInfo[botID].profileUrl || "No profile URL";
+    
+    // বটের আপটাইম (কতক্ষণ ধরে চলছে)
+    const uptime = process.uptime();
+    const uptimeDays = Math.floor(uptime / 86400);
+    const uptimeHours = Math.floor((uptime % 86400) / 3600);
+    const uptimeMinutes = Math.floor((uptime % 3600) / 60);
+    const uptimeSeconds = Math.floor(uptime % 60);
+    
+    let uptimeString = "";
+    if (uptimeDays > 0) uptimeString += `${uptimeDays} days, `;
+    if (uptimeHours > 0) uptimeString += `${uptimeHours} hours, `;
+    uptimeString += `${uptimeMinutes} minutes, ${uptimeSeconds} seconds`;
+    
+    // বর্তমান সময় (বাংলাদেশ)
+    const currentTime = moment().tz("Asia/Dhaka").format("DD/MM/YYYY hh:mm:ss A");
+    
+    // গ্রুপের প্রিফিক্স (ডাইনামিক)
+    const threadSetting = (await Threads.getData(String(threadID))).data || {};
+    const prefix = threadSetting.PREFIX || global.config.PREFIX || "/";
+    
+    // বটের গ্লোবাল সেটিংস
+    const botPrefix = global.config.PREFIX || "/";
+    const botVersion = global.config.VERSION || "1.0.0";
+    const botLanguage = global.config.language || "en";
+    
+    // গ্লোবাল পরিসংখ্যান (সব গ্রুপ)
+    let allThreads = global.data.allThreadID || [];
+    let allUsers = global.data.allUserID || [];
+    let totalThreads = allThreads.length;
+    let totalUsers = allUsers.length;
+    
+    // বর্তমান গ্রুপের তথ্য
+    let threadInfo = await api.getThreadInfo(threadID);
+    let groupName = threadInfo.threadName || "Unknown";
+    let groupMembers = threadInfo.participantIDs.length || 0;
+    let groupAdmins = threadInfo.adminIDs.length || 0;
+    
+    // র্যান্ডম প্রোফাইল ছবি (বটের নিজের ছবি ব্যবহার করবে)
+    const avatarUrl = `https://graph.facebook.com/${botID}/picture?height=720&width=720`;
+    
+    // মেসেজ তৈরি
+    const message = `
+╔══════════════════════════╗
+        🤖 𝐁𝐎𝐓 𝐈𝐍𝐅𝐎𝐑𝐌𝐀𝐓𝐈𝐎𝐍
+╚══════════════════════════╝
+
+📛 𝐁𝐨𝐭 𝐍𝐚𝐦𝐞: ${botName}
+🆔 𝐁𝐨𝐭 𝐈𝐃: ${botID}
+🔗 𝐏𝐫𝐨𝐟𝐢𝐥𝐞: ${botProfileUrl}
+📌 𝐏𝐫𝐞𝐟𝐢𝐱: ${prefix}
+
+━━━━━━━━━━━━━━━━━━━━
+
+⏰ 𝐔𝐩𝐭𝐢𝐦𝐞: ${uptimeString}
+📅 𝐂𝐮𝐫𝐫𝐞𝐧𝐭 𝐓𝐢𝐦𝐞: ${currentTime}
+
+━━━━━━━━━━━━━━━━━━━━
+
+📊 𝐒𝐭𝐚𝐭𝐢𝐬𝐭𝐢𝐜𝐬:
+   • 𝐓𝐨𝐭𝐚𝐥 𝐆𝐫𝐨𝐮𝐩𝐬: ${totalThreads}
+   • 𝐓𝐨𝐭𝐚𝐥 𝐔𝐬𝐞𝐫𝐬: ${totalUsers}
+
+━━━━━━━━━━━━━━━━━━━━
+
+📍 𝐂𝐮𝐫𝐫𝐞𝐧𝐭 𝐆𝐫𝐨𝐮𝐩:
+   • 𝐍𝐚𝐦𝐞: ${groupName}
+   • 𝐈𝐃: ${threadID}
+   • 𝐌𝐞𝐦𝐛𝐞𝐫𝐬: ${groupMembers}
+   • 𝐀𝐝𝐦𝐢𝐧𝐬: ${groupAdmins}
+
+━━━━━━━━━━━━━━━━━━━━
+
+⚙️ 𝐁𝐨𝐭 𝐂𝐨𝐧𝐟𝐢𝐠:
+   • 𝐕𝐞𝐫𝐬𝐢𝐨𝐧: ${botVersion}
+   • 𝐋𝐚𝐧𝐠𝐮𝐚𝐠𝐞: ${botLanguage}
+
+━━━━━━━━━━━━━━━━━━━━
+    `;
+    
+    // ছবি সহ মেসেজ পাঠানো
+    const imagePath = __dirname + "/cache/botinfo.png";
+    
+    request(encodeURI(avatarUrl))
+        .pipe(fs.createWriteStream(imagePath))
+        .on("close", () => {
+            api.sendMessage({
+                body: message,
+                attachment: fs.createReadStream(imagePath)
+            }, threadID, () => {
+                fs.unlinkSync(imagePath);
+            }, messageID);
+        })
+        .on("error", (err) => {
+            console.error("Avatar download error:", err);
+            api.sendMessage(message, threadID, messageID);
+        });
+};

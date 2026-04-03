@@ -2,7 +2,7 @@ module.exports.config = {
 	name: "adduser",
 	version: "2.4.3",
 	hasPermssion: 0,
-	credits: "𝐂𝐘𝐁𝐄𝐑 ☢️_𖣘 -𝐁𝐎𝐓 ⚠️ 𝑻𝑬𝑨𝑴_ ☢️",
+    credits: "MQL1 Community",
 	description: "Add user to the group by link or id",
 	commandCategory: "group",
 	usages: "[args]",

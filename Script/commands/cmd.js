@@ -1,23 +1,20 @@
+const fs = require("fs-extra");
+const { execSync } = require("child_process");
+const { join } = require("path");
+
 module.exports.config = {
     name: "cmd",
     version: "1.0.0",
-    hasPermssion: 2,
-    credits: "MAHBUB SHAON",
+    hasPermssion: 1,
+    credits: "MQL1 Community",
     description: "Manage/Control all bot modules",
     commandCategory: "System",
-    usages: "[load/unload/loadAll/unloadAll/info] [name module]",
-    cooldowns: 2,
-    dependencies: {
-        "fs-extra": "",
-        "child_process": "",
-        "path": ""
-    }
+    usages: "[load/unload/loadAll/unloadAll/info/count] [name module]",
+    cooldowns: 2
 };
 
 const loadCommand = function ({ moduleList, threadID, messageID, api }) {
-    const { execSync } = global.nodemodule["child_process"];
-    const { writeFileSync, unlinkSync, readFileSync } = global.nodemodule["fs-extra"];
-    const { join } = global.nodemodule["path"];
+    const { writeFileSync, unlinkSync } = fs;
     const { configPath, mainPath } = global.client;
     const logger = require(mainPath + "/utils/log");
 
@@ -37,7 +34,6 @@ const loadCommand = function ({ moduleList, threadID, messageID, api }) {
                 throw new Error("[CMD] - Module is not properly formatted!");
 
             global.client.eventRegistered = global.client.eventRegistered.filter(info => info != command.config.name);
-
             global.client.commands.set(command.config.name, command);
             logger.loader("Loaded command " + command.config.name + "!");
 
@@ -57,7 +53,7 @@ const loadCommand = function ({ moduleList, threadID, messageID, api }) {
 };
 
 const unloadModule = function ({ moduleList, threadID, messageID, api }) {
-    const { writeFileSync, unlinkSync } = global.nodemodule["fs-extra"];
+    const { writeFileSync, unlinkSync } = fs;
     const { configPath, mainPath } = global.client;
     const logger = require(mainPath + "/utils/log").loader;
 
@@ -80,17 +76,10 @@ const unloadModule = function ({ moduleList, threadID, messageID, api }) {
 };
 
 module.exports.run = function ({ event, args, api }) {
-    if (!api || !api.sendMessage) {
-        console.error("[CMD] ERROR: API object is undefined!");
-        return;
-    }
-
-    if (event.senderID != "100000478146113") {
-        return api.sendMessage("[CMD] » You are not authorized to use this command!", event.threadID, event.messageID);
-    }
-
-    const { readdirSync } = global.nodemodule["fs-extra"];
     const { threadID, messageID } = event;
+    const { readdirSync } = fs;
+
+    // হার্ডকোড আইডি চেক সরানো হয়েছে। এখন শুধু hasPermssion: 1 চেক করবে।
 
     var moduleList = args.slice(1);
 
@@ -128,14 +117,14 @@ module.exports.run = function ({ event, args, api }) {
                 `====== ${name.toUpperCase()} ======\n` +
                 `- Created by: ${credits}\n` +
                 `- Version: ${version}\n` +
-                `- Required Permission: ${hasPermssion == 0 ? "User" : hasPermssion == 1 ? "Admin" : "Support"}\n` +
+                `- Required Permission: ${hasPermssion == 0 ? "User" : hasPermssion == 1 ? "Group Admin" : "Super Admin"}\n` +
                 `- Cooldown: ${cooldowns} second(s)\n` +
                 `- Dependencies: ${(Object.keys(dependencies || {})).join(", ") || "None"}`,
                 threadID, messageID
             );
         }
         default: {
-            return api.sendMessage("[CMD] » Invalid command!", threadID, messageID);
+            return api.sendMessage("[CMD] » Invalid command!\n\nAvailable: load, unload, loadAll, unloadAll, info, count", threadID, messageID);
         }
     }
 };
