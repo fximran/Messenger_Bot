@@ -72,7 +72,7 @@ module.exports.handleReply = async function ({ api, event, args, Threads, handle
         break;
       }
 
-    // ========== JOIN GROUP ==========
+    // ========== JOIN GROUP WITH AUTO PROMOTE ==========
     case "join":
       {
         try {
@@ -81,13 +81,48 @@ module.exports.handleReply = async function ({ api, event, args, Threads, handle
             return api.sendMessage(`⚠️ You are already in "${groupName}" group!`, threadID, messageID);
           }
           
+          // প্রথমে ইউজারকে গ্রুপে যোগ করুন
           await api.addUserToGroup(senderID, idgr);
           
-          if (threadInfo.approvalMode == true && !threadInfo.adminIDs.some(item => item.id == api.getCurrentUserID())) {
-            return api.sendMessage(`✅ Added you to "${groupName}" approval list. Please wait for admin approval.`, threadID, messageID);
+          // একটু অপেক্ষা করুন (API রেট লিমিট এভয়েড করার জন্য)
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // বট এডমিন কিনা চেক করুন
+          const updatedThreadInfo = await api.getThreadInfo(idgr);
+          const isBotAdmin = updatedThreadInfo.adminIDs.some(admin => admin.id == api.getCurrentUserID());
+          
+          if (isBotAdmin) {
+            // বট এডমিন থাকলে ইউজারকে এডমিন বানানোর চেষ্টা করুন
+            try {
+              await api.changeAdminStatus(idgr, senderID, true);
+              
+              // সাফল্যের মেসেজ
+              const successMsg = `✅ Successfully added you to "${groupName}" group and promoted you to ADMIN!\n\n` +
+                                `👑 You are now an admin of this group.\n` +
+                                `📌 Check your groups section.`;
+              
+              return api.sendMessage(successMsg, threadID, messageID);
+              
+            } catch (promoteError) {
+              // এডমিন বানাতে ব্যর্থ হলে (নেটওয়ার্ক বা ফেসবুক এরর)
+              console.log("Promote error:", promoteError);
+              
+              const partialMsg = `⚠️ Added you to "${groupName}" group, but failed to promote you to admin.\n\n` +
+                                `Reason: ${promoteError.message || "Unknown error"}\n\n` +
+                                `💡 You can ask a group admin to manually promote you.`;
+              
+              return api.sendMessage(partialMsg, threadID, messageID);
+            }
           } else {
-            return api.sendMessage(`✅ Successfully added you to "${groupName}" group!\n📌 Check your message requests if you don't see the group.`, threadID, messageID);
+            // বট এডমিন না থাকলে শুধু যোগ করার মেসেজ
+            const botNotAdminMsg = `✅ Added you to "${groupName}" group!\n\n` +
+                                  `⚠️ Bot is not an admin in this group, so couldn't promote you.\n` +
+                                  `💡 Ask an admin to promote you manually.\n\n` +
+                                  `📌 Check your message requests if you don't see the group.`;
+            
+            return api.sendMessage(botNotAdminMsg, threadID, messageID);
           }
+          
         } catch (error) {
           console.log("Join error:", error);
           return api.sendMessage(`❌ Failed to add you to "${groupName}".\nReason: ${error.message || "Bot may not be admin or group is full"}`, threadID, messageID);
