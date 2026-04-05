@@ -1,0 +1,16 @@
+{
+  "messages": [
+    {
+      "id": "1775377232473_sfun7",
+      "text": "Add with default timer",
+      "interval": null
+    }
+  ],
+  "enabled": true,
+  "interval": 1,
+  "target": "current",
+  "lastSent": {
+    "1775377232473_sfun7": 1775377503435
+  },
+  "defaultInterval": 2
+}
