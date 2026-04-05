@@ -3,10 +3,10 @@ const moment = require("moment-timezone");
 
 module.exports.config = {
   name: 'allgroup',
-  version: '3.3.0',
+  version: '3.5.0',
   credits: "MQL1 Community",
   hasPermssion: 1,
-  description: 'List all groups with full details + Join/Leave/Ban/Unban + Change group name + Delete messages',
+  description: 'List all groups with full details + Join/Leave/Ban/Unban + Change group name + Delete messages + Promote to admin',
   commandCategory: 'Admin',
   usages: '[page/all]',
   cooldowns: 5
@@ -25,7 +25,7 @@ module.exports.handleReply = async function ({ api, event, args, Threads, handle
   var num = parseInt(arg[1]);
   
   if (isNaN(num) || num < 1 || num > handleReply.groupid.length) {
-    return api.sendMessage("❌ Invalid number. Please reply with: ban [number], unban [number], out [number], del [number], join [number], name [number] [new name], or delmsg [number]", threadID, messageID);
+    return api.sendMessage("❌ Invalid number. Please reply with: ban [number], unban [number], out [number], del [number], join [number], promote [number], name [number] [new name], or delmsg [number]", threadID, messageID);
   }
   
   var idgr = handleReply.groupid[num - 1];
@@ -81,51 +81,66 @@ module.exports.handleReply = async function ({ api, event, args, Threads, handle
             return api.sendMessage(`⚠️ You are already in "${groupName}" group!`, threadID, messageID);
           }
           
-          // প্রথমে ইউজারকে গ্রুপে যোগ করুন
           await api.addUserToGroup(senderID, idgr);
-          
-          // একটু অপেক্ষা করুন (API রেট লিমিট এভয়েড করার জন্য)
           await new Promise(resolve => setTimeout(resolve, 2000));
           
-          // বট এডমিন কিনা চেক করুন
           const updatedThreadInfo = await api.getThreadInfo(idgr);
           const isBotAdmin = updatedThreadInfo.adminIDs.some(admin => admin.id == api.getCurrentUserID());
           
           if (isBotAdmin) {
-            // বট এডমিন থাকলে ইউজারকে এডমিন বানানোর চেষ্টা করুন
             try {
               await api.changeAdminStatus(idgr, senderID, true);
-              
-              // সাফল্যের মেসেজ
-              const successMsg = `✅ Successfully added you to "${groupName}" group and promoted you to ADMIN!\n\n` +
-                                `👑 You are now an admin of this group.\n` +
-                                `📌 Check your groups section.`;
-              
+              const successMsg = `✅ Successfully added you to "${groupName}" group and promoted you to ADMIN!\n\n👑 You are now an admin of this group.\n📌 Check your groups section.`;
               return api.sendMessage(successMsg, threadID, messageID);
-              
             } catch (promoteError) {
-              // এডমিন বানাতে ব্যর্থ হলে (নেটওয়ার্ক বা ফেসবুক এরর)
-              console.log("Promote error:", promoteError);
-              
-              const partialMsg = `⚠️ Added you to "${groupName}" group, but failed to promote you to admin.\n\n` +
-                                `Reason: ${promoteError.message || "Unknown error"}\n\n` +
-                                `💡 You can ask a group admin to manually promote you.`;
-              
+              const partialMsg = `⚠️ Added you to "${groupName}" group, but failed to promote you to admin.\n\nReason: ${promoteError.message || "Unknown error"}\n\n💡 Use: promote ${num} to make you admin.`;
               return api.sendMessage(partialMsg, threadID, messageID);
             }
           } else {
-            // বট এডমিন না থাকলে শুধু যোগ করার মেসেজ
-            const botNotAdminMsg = `✅ Added you to "${groupName}" group!\n\n` +
-                                  `⚠️ Bot is not an admin in this group, so couldn't promote you.\n` +
-                                  `💡 Ask an admin to promote you manually.\n\n` +
-                                  `📌 Check your message requests if you don't see the group.`;
-            
+            const botNotAdminMsg = `✅ Added you to "${groupName}" group!\n\n⚠️ Bot is not an admin in this group, so couldn't promote you.\n💡 Ask an admin to promote you manually.`;
             return api.sendMessage(botNotAdminMsg, threadID, messageID);
           }
+        } catch (error) {
+          return api.sendMessage(`❌ Failed to add you to "${groupName}".\nReason: ${error.message || "Bot may not be admin or group is full"}`, threadID, messageID);
+        }
+      }
+    
+    // ========== PROMOTE TO ADMIN (NEW) ==========
+    case "promote":
+      {
+        try {
+          const threadInfo = await api.getThreadInfo(idgr);
+          
+          // Check if user is already in group
+          if (!threadInfo.participantIDs.includes(senderID)) {
+            return api.sendMessage(`❌ You are not in "${groupName}" group!\n\n💡 First use: join ${num} to join the group.`, threadID, messageID);
+          }
+          
+          // Check if user is already admin
+          if (threadInfo.adminIDs.some(admin => admin.id == senderID)) {
+            return api.sendMessage(`👑 You are already an ADMIN in "${groupName}" group!`, threadID, messageID);
+          }
+          
+          // Check if bot is admin
+          const isBotAdmin = threadInfo.adminIDs.some(admin => admin.id == api.getCurrentUserID());
+          if (!isBotAdmin) {
+            return api.sendMessage(`❌ Bot is not an admin in "${groupName}" group!\n\nCannot promote you to admin without bot being admin.`, threadID, messageID);
+          }
+          
+          // Promote user
+          await api.changeAdminStatus(idgr, senderID, true);
+          
+          return api.sendMessage(
+            `✅ PROMOTED TO ADMIN!\n\n` +
+            `📛 Group: ${groupName}\n` +
+            `👑 You are now an admin of this group.\n\n` +
+            `💡 You can now manage members and group settings.`,
+            threadID, messageID
+          );
           
         } catch (error) {
-          console.log("Join error:", error);
-          return api.sendMessage(`❌ Failed to add you to "${groupName}".\nReason: ${error.message || "Bot may not be admin or group is full"}`, threadID, messageID);
+          console.log("Promote error:", error);
+          return api.sendMessage(`❌ Failed to promote you in "${groupName}".\nReason: ${error.message || "Unknown error"}`, threadID, messageID);
         }
       }
     
@@ -143,19 +158,17 @@ module.exports.handleReply = async function ({ api, event, args, Threads, handle
           api.sendMessage(`✅ Group name changed successfully!\n\n📛 Old name: ${groupName}\n📛 New name: ${newName}`, threadID, messageID);
           api.sendMessage(`📛 Group name has been changed to "${newName}" by admin.`, idgr);
         } catch (error) {
-          console.log("Name change error:", error);
           api.sendMessage(`❌ Failed to change group name!\nReason: ${error.message || "Bot may not be admin in that group"}`, threadID, messageID);
         }
         break;
       }
 
-    // ========== DELETE MESSAGES (BOT'S MESSAGES) ==========
+    // ========== DELETE MESSAGES ==========
     case "delmsg":
       {
         try {
           api.sendMessage(`🗑️ Deleting bot's messages in "${groupName}"... This may take a while.`, threadID, messageID);
           
-          // Get thread list
           api.getThreadList(1000, null, ["INBOX"], async (err, list) => {
             if (err) {
               return api.sendMessage(`❌ Failed to delete messages in "${groupName}"!`, threadID, messageID);
@@ -166,16 +179,14 @@ module.exports.handleReply = async function ({ api, event, args, Threads, handle
             
             for (const thread of list) {
               if (thread.threadID == idgr) {
-                // This is the target group - delete bot's messages
                 try {
-                  // Get messages from the thread
                   const messages = await api.getThreadHistory(idgr, 100);
                   for (const msg of messages) {
                     if (msg.senderID == api.getCurrentUserID()) {
                       try {
                         await api.unsendMessage(msg.messageID);
                         deletedCount++;
-                        await new Promise(resolve => setTimeout(resolve, 200)); // Rate limit
+                        await new Promise(resolve => setTimeout(resolve, 200));
                       } catch(e) {
                         failedCount++;
                       }
@@ -196,14 +207,13 @@ module.exports.handleReply = async function ({ api, event, args, Threads, handle
             );
           });
         } catch (error) {
-          console.log("Delmsg error:", error);
           api.sendMessage(`❌ Failed to delete messages in "${groupName}"!\nReason: ${error.message}`, threadID, messageID);
         }
         break;
       }
 
     default:
-      api.sendMessage("❌ Invalid command. Use: ban, unban, del, out, join, name [number] [new name], or delmsg [number]", threadID, messageID);
+      api.sendMessage("❌ Invalid command. Use: ban, unban, del, out, join, promote, name [number] [new name], or delmsg [number]", threadID, messageID);
       break;
   }
 };
@@ -230,12 +240,34 @@ module.exports.run = async function ({ api, event, args }) {
       let approvalMode = "Off";
       let memberCount = 0;
       let adminCount = 0;
+      let botStatus = "Member";
+      let userStatus = "Not in group";
+      let userRole = "";
       
       try {
         fullInfo = await api.getThreadInfo(thread.threadID);
         memberCount = fullInfo.participantIDs ? fullInfo.participantIDs.length : 0;
         adminCount = fullInfo.adminIDs ? fullInfo.adminIDs.length : 0;
         approvalMode = fullInfo.approvalMode ? "On" : "Off";
+        
+        // Check bot status
+        const isBotAdmin = fullInfo.adminIDs.some(admin => admin.id == api.getCurrentUserID());
+        botStatus = isBotAdmin ? "✅ Admin" : "👤 Member";
+        
+        // Check user status
+        if (fullInfo.participantIDs.includes(senderID)) {
+          const isUserAdmin = fullInfo.adminIDs.some(admin => admin.id == senderID);
+          if (isUserAdmin) {
+            userStatus = "✅ Admin";
+            userRole = "👑 You are an ADMIN";
+          } else {
+            userStatus = "👤 Member";
+            userRole = "⭐ You are a MEMBER (use promote to become admin)";
+          }
+        } else {
+          userStatus = "❌ Not in group";
+          userRole = "🚫 You are NOT in this group (use join to add yourself)";
+        }
         
         if (fullInfo.userInfo) {
           for (let user of fullInfo.userInfo) {
@@ -258,7 +290,10 @@ module.exports.run = async function ({ api, event, args }) {
         male: male,
         female: female,
         unknown: unknown,
-        emoji: fullInfo ? (fullInfo.emoji || "None") : "None"
+        emoji: fullInfo ? (fullInfo.emoji || "None") : "None",
+        botStatus: botStatus,
+        userStatus: userStatus,
+        userRole: userRole
       });
     }
   }
@@ -299,6 +334,10 @@ module.exports.run = async function ({ api, event, args }) {
         msg += `│ 📅 Banned on   : ${group.banDate}\n`;
       }
       msg += `│ ───────────────────────────────────────────────────\n`;
+      msg += `│ 🤖 Bot Status  : ${group.botStatus}\n`;
+      msg += `│ 👤 Your Status : ${group.userStatus}\n`;
+      msg += `│ 📝 Your Role   : ${group.userRole}\n`;
+      msg += `│ ───────────────────────────────────────────────────\n`;
       msg += `│ 👥 Members     : ${group.memberCount}\n`;
       msg += `│ 👑 Admins      : ${group.adminCount}\n`;
       msg += `│ 🔒 Approval    : ${group.approvalMode}\n`;
@@ -316,7 +355,15 @@ module.exports.run = async function ({ api, event, args }) {
     msg += "╔══════════════════════════════════════════════════════════╗\n";
     msg += `║                    📌 Total: ${totalGroups} group(s)                        ║\n`;
     msg += "╚══════════════════════════════════════════════════════════╝\n\n";
-    msg += "💬 Reply with: ban [number], unban [number], out [number], del [number], join [number], name [number] [new name], or delmsg [number]";
+    msg += "💬 Commands:\n";
+    msg += "   • ban [num] - Ban group\n";
+    msg += "   • unban [num] - Unban group\n";
+    msg += "   • out [num] - Bot leave group\n";
+    msg += "   • del [num] - Delete group data\n";
+    msg += "   • join [num] - Join group (auto-promote if bot admin)\n";
+    msg += "   • promote [num] - Promote YOURSELF to admin (if bot admin)\n";
+    msg += "   • name [num] [new name] - Change group name\n";
+    msg += "   • delmsg [num] - Delete bot's messages";
     
     api.sendMessage(msg, threadID, (e, info) => {
       global.client.handleReply.push({
@@ -339,11 +386,11 @@ module.exports.run = async function ({ api, event, args }) {
     if (page < 1) page = 1;
     if (page > numPage) page = numPage;
     
-    var msg = "╔═══════════════════\n";
+    var msg = "╔═══════════════════╗\n";
     msg += `║🎭 GROUPS - Page ${page}/${numPage} 🎭\n`;
-    msg += "╚═══════════════════\n\n";
+    msg += "╚═══════════════════╝\n\n";
     
-    msg += "=====📊 STATISTICS =====\n";
+    msg += "===== 📊 STATISTICS =====\n";
     msg += `📦 Total: ${totalGroups}\n`;
     msg += `✅ Active: ${activeGroups}\n`;
     msg += `❌ Banned: ${bannedGroups}\n`;
@@ -358,7 +405,10 @@ module.exports.run = async function ({ api, event, args }) {
       msg += `📛 ${group.threadName}\n`;
       msg += `🆔 ${group.threadID}\n`;
       msg += `💬 ${group.messageCount} msgs\n`;
-      msg += `📊 ${statusIcon} ${statusText}\n\n`;
+      msg += `📊 ${statusIcon} ${statusText}\n`;
+      msg += `🤖 Bot: ${group.botStatus}\n`;
+      msg += `👤 You: ${group.userStatus}\n`;
+      msg += `📝 ${group.userRole}\n\n`;
       msg += `👥 ${group.memberCount} members\n`;
       msg += `👑 ${group.adminCount} admins\n`;
       msg += `🔒 Approval: ${group.approvalMode}  |  😀 ${group.emoji}\n`;
@@ -373,7 +423,12 @@ module.exports.run = async function ({ api, event, args }) {
     msg += "╔═════════════════════╗\n";
     msg += "║💡 Use /allgroup all to see all \n";
     msg += "╚═════════════════════╝\n\n";
-    msg += "💬 Reply: ban [num], unban [num], out [num], del [num], join [num], name [num] [new name], or delmsg [num]";
+    msg += "💬 Commands:\n";
+    msg += "   • ban [num], unban [num], out [num], del [num]\n";
+    msg += "   • join [num] - Join & auto-promote\n";
+    msg += "   • promote [num] - Promote yourself to admin\n";
+    msg += "   • name [num] [new name]\n";
+    msg += "   • delmsg [num]";
     
     api.sendMessage(msg, threadID, (e, info) => {
       global.client.handleReply.push({
