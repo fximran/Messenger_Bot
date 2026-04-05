@@ -4,7 +4,7 @@ const { writeFileSync, readdirSync, existsSync, unlinkSync } = fs;
 module.exports.config = {
     name: "clearcache",
     version: "1.0.0",
-    hasPermssion: 1,          // গ্রুপ এডমিন (হার্ডকোড সরানো হয়েছে)
+    hasPermssion: 1,
     credits: "MQL1 Community",
     description: "Delete cache files by extension",
     commandCategory: "system",
