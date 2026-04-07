@@ -15,8 +15,26 @@ function randomColor() {
 const botName = branding.botName || "Bot";
 const loaderName = branding.loaderName || "LOADED";
 
+// Check if debug mode is enabled
+function isDebugEnabled() {
+    // Check global debug mode (set by /bot debug on/off)
+    if (typeof global.debugMode !== 'undefined' && global.debugMode === true) {
+        return true;
+    }
+    // Check environment variable
+    if (process.env.DEBUG === 'true' || process.env.DEBUG === '1') {
+        return true;
+    }
+    return false;
+}
+
 // Main log function
 module.exports = (message, type) => {
+    // Show all logs in debug mode, otherwise show only warnings and errors
+    if (!isDebugEnabled() && type !== 'warning' && type !== 'error') {
+        return; // Skip info and success logs when debug is OFF
+    }
+    
     switch (type) {
         case 'success':
             console.log(chalk.hex('#00FF00')('[✓] ') + chalk.hex('#00FF00')(message));
@@ -35,6 +53,11 @@ module.exports = (message, type) => {
 
 // Loader function for loading animations
 module.exports.loader = (message, type) => {
+    // Show all loader logs only in debug mode
+    if (!isDebugEnabled()) {
+        return; // Skip loader logs when debug is OFF
+    }
+    
     switch (type) {
         case 'success':
             console.log(chalk.hex('#00FF00')('[✓] ') + chalk.hex('#00FF00')(`${loaderName}: `) + chalk.hex('#00FF00')(message));

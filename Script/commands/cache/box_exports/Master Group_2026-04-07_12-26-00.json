@@ -1,0 +1,64 @@
+{
+  "exportedAt": "07/04/2026 12:26:00 PM",
+  "groupId": "2172183156945782",
+  "groupName": "Master Group",
+  "totalMembers": 8,
+  "members": [
+    {
+      "id": "61550785192378",
+      "name": "Suraiya Afrin",
+      "username": "suraiya.afrin.5050",
+      "gender": "Male",
+      "isAdmin": false
+    },
+    {
+      "id": "61573472373228",
+      "name": "Imran Hossain",
+      "username": "No username",
+      "gender": "Male",
+      "isAdmin": true
+    },
+    {
+      "id": "61574377712553",
+      "name": "Facebook user",
+      "username": "No username",
+      "gender": "Not specified",
+      "isAdmin": false
+    },
+    {
+      "id": "100007799914404",
+      "name": "Imran Hossain",
+      "username": "imranhossain7976",
+      "gender": "Male",
+      "isAdmin": false
+    },
+    {
+      "id": "100008446090941",
+      "name": "Imran Hossain",
+      "username": "fximran360",
+      "gender": "Male",
+      "isAdmin": true
+    },
+    {
+      "id": "100028267388862",
+      "name": "Nasir Imran",
+      "username": "nasir.imran.56808",
+      "gender": "Male",
+      "isAdmin": false
+    },
+    {
+      "id": "100045106102813",
+      "name": "Imran Hossain",
+      "username": "imranhossain3564",
+      "gender": "Male",
+      "isAdmin": false
+    },
+    {
+      "id": "100095192777478",
+      "name": "Robiul Islam",
+      "username": "fxmrobiul",
+      "gender": "Male",
+      "isAdmin": false
+    }
+  ]
+}

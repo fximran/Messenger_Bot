@@ -1,0 +1,22 @@
+{
+  "exportedAt": "07/04/2026 02:08:28 PM",
+  "groupId": "2358488107953086",
+  "groupName": "My Group Single3",
+  "totalMembers": 2,
+  "members": [
+    {
+      "id": "61573472373228",
+      "name": "Imran Hossain",
+      "username": "No username",
+      "gender": "Male",
+      "isAdmin": true
+    },
+    {
+      "id": "100008446090941",
+      "name": "Imran Hossain",
+      "username": "fximran360",
+      "gender": "Male",
+      "isAdmin": true
+    }
+  ]
+}
