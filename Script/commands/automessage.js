@@ -3,7 +3,7 @@ const moment = require("moment-timezone");
 
 module.exports.config = {
     name: "automessage",
-    version: "3.0.0",
+    version: "3.1.0",
     credits: "MQL1 Community",
     description: "Auto send messages in current group with individual timers",
     commandCategory: "system",
@@ -11,9 +11,16 @@ module.exports.config = {
     cooldowns: 5
 };
 
-// Data storage path (per group)
+// Data storage path (per group) - এখন আলাদা ফোল্ডারে
+const basePath = __dirname + "/cache/automessage/";
+
+// ফোল্ডার তৈরি করুন (যদি না থাকে)
+if (!fs.existsSync(basePath)) {
+    fs.mkdirSync(basePath, { recursive: true });
+}
+
 function getDataPath(threadID) {
-    return __dirname + "/cache/automessage_" + threadID + ".json";
+    return basePath + "automessage_" + threadID + ".json";
 }
 
 // Load data for specific group
@@ -255,14 +262,12 @@ module.exports.handleReply = async function({ event, api, handleReply }) {
             return api.sendMessage(`❌ Invalid message number! Use /automessage list to see numbers.`, threadID, messageID);
         }
         
-        // If timer is 0, remove custom timer (use default)
         if (newTimer === 0) {
             currentData.messages[num-1].interval = null;
             saveData(targetThread, currentData);
             return api.sendMessage(`✅ Message ${num} will now use DEFAULT timer (${currentData.defaultInterval} minutes)!`, threadID, messageID);
         }
         
-        // Otherwise set custom timer
         if (isNaN(newTimer) || newTimer < 1 || newTimer > 1440) {
             return api.sendMessage(`❌ Invalid timer! Enter 1-1440 minutes, or 0 to use default.`, threadID, messageID);
         }

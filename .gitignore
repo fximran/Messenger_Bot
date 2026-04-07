@@ -7,3 +7,6 @@ logs/
 temp/
 tmp/
 .cache/
+
+cache/automessage/
+cache/box_exports/
