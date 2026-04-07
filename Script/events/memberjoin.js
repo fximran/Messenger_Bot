@@ -2,44 +2,27 @@ module.exports.config = {
     name: "memberjoin",
     eventType: ["log:subscribe"],
     version: "2.0.0",
-    credits: "CYBER BOT TEAM + Modified by ChatGPT",
-    description: "Handle member join events with anti join support"
-};
-
-module.exports.onLoad = function () {
-    // Store users kicked by anti join so leave messages can be suppressed
-    if (!global.client.antiJoinKicked) global.client.antiJoinKicked = new Map();
-
-    // Store users restored by anti out so welcome messages can be suppressed
-    if (!global.client.antiOutReadded) global.client.antiOutReadded = new Map();
-
-    return;
+    credits: "MQL1 Community",
+    description: "Send welcome message when someone joins the group"
 };
 
 module.exports.run = async function ({ api, event, Threads }) {
     const { threadID } = event;
 
     try {
-        const threadData =
-            global.data.threadData.get(parseInt(threadID)) ||
-            (await Threads.getData(threadID)).data ||
-            {};
-
-        const antiJoin = threadData.newMember === true;
-
         // If bot itself was added
         if (event.logMessageData.addedParticipants.some(i => i.userFbId == api.getCurrentUserID())) {
+            const threadData = (await Threads.getData(threadID)).data || {};
+            const prefix = threadData.PREFIX || global.config.PREFIX || "/";
+            
             api.changeNickname(
-                `[ ${global.config.PREFIX} ] • ${!global.config.BOTNAME ? "Bot" : global.config.BOTNAME}`,
+                `[ ${prefix} ] • ${!global.config.BOTNAME ? "Bot" : global.config.BOTNAME}`,
                 threadID,
                 api.getCurrentUserID()
             );
 
             return api.sendMessage(
-                `🤖 Thanks for adding me!\n\n` +
-                `I am now online, mildly dramatic, and ready to work.\n` +
-                `Type ${global.config.PREFIX}help to see commands.\n\n` +
-                `Let's make this group slightly more chaotic. 😎`,
+                `🤖 Thanks for adding me!\n\nI am now online and ready to work.\nType ${prefix}help to see commands.\n\nLet's make this group great! 😎`,
                 threadID
             );
         }
@@ -48,68 +31,45 @@ module.exports.run = async function ({ api, event, Threads }) {
         const threadName = threadInfo.threadName || "this group";
         const participantIDs = threadInfo.participantIDs || [];
 
-        // Collect real new members, excluding the bot
+        // Collect new members (excluding bot)
         const addedUsers = event.logMessageData.addedParticipants.filter(
             item => item.userFbId != api.getCurrentUserID()
         );
 
         if (!addedUsers.length) return;
 
-        // If anti join is enabled, warn and remove new users
-        if (antiJoin) {
-            await api.sendMessage(
-                "🚫 Joining is currently restricted.\nPlease contact a group admin before adding a new member.",
-                threadID
-            );
+        // Get language for this group
+        const threadData = (await Threads.getData(threadID)).data || {};
+        const lang = threadData.language || global.config.language || "en";
 
-            for (const user of addedUsers) {
-                global.client.antiJoinKicked.set(`${threadID}_${user.userFbId}`, true);
-
-                setTimeout(() => {
-                    global.client.antiJoinKicked.delete(`${threadID}_${user.userFbId}`);
-                }, 30000);
-
-                api.removeUserFromGroup(user.userFbId, threadID);
+        // Language specific welcome messages
+        const messages = {
+            en: {
+                welcome: "🎉 Welcome {names}!\n\nYou just joined {threadName}.\nYou are member no. {memberNumbers}.\n\n😄 Have fun and enjoy!\n📌 Please read the group rules."
+            },
+            bn: {
+                welcome: "🎉 Shagotom {names}!\n\nApni {threadName} group e join korechen.\nApnar member number: {memberNumbers}.\n\n😄 Mazza korun!\n📌 Group rules follow korun."
+            },
+            hi: {
+                welcome: "🎉 Swagat hai {names}!\n\nAap {threadName} group mein shamil hue.\nAap member number {memberNumbers} hain.\n\n😄 Maza karein!\n📌 Kripya group rules follow karein."
             }
+        };
 
-            return;
-        }
+        const msg = messages[lang] || messages.en;
 
-        // If user was re-added because of anti out, skip welcome message
-        const filteredUsers = addedUsers.filter(user => {
-            const key = `${threadID}_${user.userFbId}`;
-            if (global.client.antiOutReadded && global.client.antiOutReadded.has(key)) {
-                global.client.antiOutReadded.delete(key);
-                return false;
-            }
-            return true;
-        });
-
-        if (!filteredUsers.length) return;
-
-        const names = filteredUsers.map(user => user.fullName);
-        const memberNumbers = filteredUsers
+        const names = addedUsers.map(user => user.fullName).join(", ");
+        const memberNumbers = addedUsers
             .map((_, index) => participantIDs.length - index)
-            .sort((a, b) => a - b);
+            .sort((a, b) => a - b)
+            .join(", ");
 
-        let msg;
+        const welcomeMsg = msg.welcome
+            .replace("{names}", names)
+            .replace("{threadName}", threadName)
+            .replace("{memberNumbers}", memberNumbers);
 
-        if (typeof threadData.customJoin === "undefined") {
-            msg =
-                `🎉 Welcome ${names.join(", ")}!\n\n` +
-                `You just joined ${threadName}.\n` +
-                `You are member no. ${memberNumbers.join(", ")}.\n\n` +
-                `😄 Have fun, chat a lot, and pretend to be productive.\n` +
-                `📌 Please do not press random buttons unless you enjoy consequences.`;
-        } else {
-            msg = threadData.customJoin
-                .replace(/\{name}/g, names.join(", "))
-                .replace(/\{type}/g, names.length > 1 ? "Friends" : "Friend")
-                .replace(/\{soThanhVien}/g, memberNumbers.join(", "))
-                .replace(/\{threadName}/g, threadName);
-        }
-
-        return api.sendMessage(msg, threadID);
+        return api.sendMessage(welcomeMsg, threadID);
+        
     } catch (e) {
         return console.log(e);
     }

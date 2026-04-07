@@ -2,7 +2,7 @@ module.exports.config = {
     name: "memberleave",
     eventType: ["log:unsubscribe"],
     version: "2.0.0",
-    credits: "CYBER BOT TEAM + Modified by ChatGPT",
+    credits: "MQL1 Community",
     description: "Handle member leave events with anti out support"
 };
 
@@ -24,17 +24,45 @@ module.exports.run = async function ({ api, event, Users, Threads }) {
         // Ignore if bot itself left
         if (leftUserId == api.getCurrentUserID()) return;
 
-        const data =
+        const threadData =
             global.data.threadData.get(parseInt(threadID)) ||
             (await Threads.getData(threadID)).data ||
             {};
 
+        const antiout = threadData.antiout === true;
+        
+        // Get language for this group
+        const lang = threadData.language || global.config.language || "en";
+        
         const name =
             global.data.userName.get(leftUserId) ||
             await Users.getNameUser(leftUserId);
 
         const leftBySelf = event.author == leftUserId;
-        const type = leftBySelf ? "left on their own" : "was removed";
+        
+        // Language specific messages (ALL in English letters)
+        const messages = {
+            en: {
+                antiout_notice: "»» NOTICE ««\n{name} tried to leave the group, but Anti-Out is active.\nThe member has been added back successfully.",
+                antiout_failed: "⚠️ {name} tried to leave, but I could not add them back.\nPlease make sure I have admin permission.",
+                goodbye_self: "👋 Goodbye {name}!\n\nThey left on their own.\nThe chat is now slightly less chaotic.\n\n😅 We will pretend not to miss them.\n📦 One less legend in the group.",
+                goodbye_kicked: "👋 Goodbye {name}!\n\nThey was removed.\nThe chat is now slightly less chaotic.\n\n😅 We will pretend not to miss them.\n📦 One less legend in the group."
+            },
+            bn: {
+                antiout_notice: "»» NOTICE ««\n{name} group charar cheshta koreche, kintu Anti-Out active ache.\nShodoshyo ke abar add kora hoyeche.",
+                antiout_failed: "⚠️ {name} group charar cheshta koreche, kintu ami add korte parini.\nDoya kore nishchit korun bot er admin permission ache.",
+                goodbye_self: "👋 Bye {name}!\n\nTara nijeder icchay group charlo.\nGroup ektu somoyer jonno kom chaotic holo.\n\n😅 Amra bhabbo je tader miss kori na.\n📦 Ekti kom legend group e.",
+                goodbye_kicked: "👋 Bye {name}!\n\nTara ke group theke remove kora hoyeche.\nGroup ektu somoyer jonno kom chaotic holo.\n\n😅 Amra bhabbo je tader miss kori na.\n📦 Ekti kom legend group e."
+            },
+            hi: {
+                antiout_notice: "»» NOTICE ««\n{name} ne group chodne ki koshish ki, lekin Anti-Out active hai.\nSadasya ko wapas jod diya gaya hai.",
+                antiout_failed: "⚠️ {name} ne group chodne ki koshish ki, lekin main wapas nahi jod saka.\nKripya sunishchit karein ki bot ke paas admin permission hai.",
+                goodbye_self: "👋 Alvida {name}!\n\nUnhone khud se group choda.\nGroup thoda kam chaotic ho gaya.\n\n😅 Hum sochte hain ki unhe miss nahi karte.\n📦 Ek kam legend group mein.",
+                goodbye_kicked: "👋 Alvida {name}!\n\nUnhe group se hata diya gaya.\nGroup thoda kam chaotic ho gaya.\n\n😅 Hum sochte hain ki unhe miss nahi karte.\n📦 Ek kam legend group mein."
+            }
+        };
+        
+        const msg = messages[lang] || messages.en;
 
         // If user was kicked by anti join, suppress leave message
         if (global.client.antiJoinKicked && global.client.antiJoinKicked.has(`${threadID}_${leftUserId}`)) {
@@ -43,7 +71,7 @@ module.exports.run = async function ({ api, event, Users, Threads }) {
         }
 
         // If anti out is enabled and user left by self, re-add them
-        if (data.antiout === true && leftBySelf) {
+        if (antiout && leftBySelf) {
             try {
                 global.client.antiOutReadded.set(`${threadID}_${leftUserId}`, true);
 
@@ -54,36 +82,27 @@ module.exports.run = async function ({ api, event, Users, Threads }) {
                 await api.addUserToGroup(leftUserId, threadID);
 
                 return api.sendMessage(
-                    `»» NOTICE ««\n${name} tried to leave the group, but Anti-Out is active.\nThe member has been added back successfully.`,
+                    msg.antiout_notice.replace("{name}", name),
                     threadID
                 );
             } catch (e) {
                 return api.sendMessage(
-                    `⚠️ ${name} tried to leave, but I could not add them back.\nPlease make sure I have admin permission.`,
+                    msg.antiout_failed.replace("{name}", name),
                     threadID
                 );
             }
         }
 
         // Normal goodbye message when anti out is off
-        let msg;
-
-        if (typeof data.customLeave === "undefined") {
-            msg =
-                `👋 Goodbye ${name}!\n\n` +
-                `They ${type}.\n` +
-                `The chat is now slightly less chaotic.\n\n` +
-                `😅 We will pretend not to miss them.\n` +
-                `📦 One less legend in the group.`;
+        let goodbyeMsg;
+        if (leftBySelf) {
+            goodbyeMsg = msg.goodbye_self.replace("{name}", name);
         } else {
-            msg = data.customLeave
-                .replace(/\{name}/g, name)
-                .replace(/\{type}/g, type)
-                .replace(/\{session}/g, "")
-                .replace(/\{time}/g, "");
+            goodbyeMsg = msg.goodbye_kicked.replace("{name}", name);
         }
 
-        return api.sendMessage(msg, threadID);
+        return api.sendMessage(goodbyeMsg, threadID);
+        
     } catch (e) {
         return console.log(e);
     }
