@@ -1,18 +1,14 @@
 module.exports.config = {
     name: "memberleave",
     eventType: ["log:unsubscribe"],
-    version: "2.0.0",
+    version: "3.0.0",
     credits: "MQL1 Community",
-    description: "Handle member leave events with anti out support"
+    description: "Silent mode - Only works when bot is admin"
 };
 
 module.exports.onLoad = function () {
-    // Store users restored by anti out so welcome messages can be suppressed
     if (!global.client.antiOutReadded) global.client.antiOutReadded = new Map();
-
-    // Store users kicked by anti join so leave messages can be suppressed
     if (!global.client.antiJoinKicked) global.client.antiJoinKicked = new Map();
-
     return;
 };
 
@@ -21,26 +17,22 @@ module.exports.run = async function ({ api, event, Users, Threads }) {
         const threadID = event.threadID;
         const leftUserId = event.logMessageData.leftParticipantFbId;
 
-        // Ignore if bot itself left
         if (leftUserId == api.getCurrentUserID()) return;
 
-        const threadData =
-            global.data.threadData.get(parseInt(threadID)) ||
-            (await Threads.getData(threadID)).data ||
-            {};
+        // চেক করা বট গ্রুপে অ্যাডমিন কিনা
+        const threadInfo = await api.getThreadInfo(threadID);
+        const isBotAdmin = threadInfo.adminIDs.some(admin => admin.id == api.getCurrentUserID());
 
+        // বট অ্যাডমিন না হলে কিছুই করবে না (সাইলেন্ট মোড)
+        if (!isBotAdmin) return;
+
+        const threadData = global.data.threadData.get(parseInt(threadID)) || (await Threads.getData(threadID)).data || {};
         const antiout = threadData.antiout === true;
-        
-        // Get language for this group
         const lang = threadData.language || global.config.language || "en";
         
-        const name =
-            global.data.userName.get(leftUserId) ||
-            await Users.getNameUser(leftUserId);
-
+        const name = global.data.userName.get(leftUserId) || await Users.getNameUser(leftUserId);
         const leftBySelf = event.author == leftUserId;
         
-        // Language specific messages (ALL in English letters)
         const messages = {
             en: {
                 antiout_notice: "»» NOTICE ««\n{name} tried to leave the group, but Anti-Out is active.\nThe member has been added back successfully.",
@@ -52,7 +44,7 @@ module.exports.run = async function ({ api, event, Users, Threads }) {
                 antiout_notice: "»» NOTICE ««\n{name} group charar cheshta koreche, kintu Anti-Out active ache.\nShodoshyo ke abar add kora hoyeche.",
                 antiout_failed: "⚠️ {name} group charar cheshta koreche, kintu ami add korte parini.\nDoya kore nishchit korun bot er admin permission ache.",
                 goodbye_self: "👋 Bye {name}!\n\nTara nijeder icchay group charlo.\nGroup ektu somoyer jonno kom chaotic holo.\n\n😅 Amra bhabbo je tader miss kori na.\n📦 Ekti kom legend group e.",
-                goodbye_kicked: "👋 Bye {name}!\n\nTara ke group theke remove kora hoyeche.\nGroup ektu somoyer jonno kom chaotic holo.\n\n😅 Amra bhabbo je tader miss kori na.\n📦 Ekti kom legend group e."
+                goodbye_kicked: "👋 Bye {name}!\n\nTake group theke remove kora hoyeche.\nGroup ektu somoyer jonno kom chaotic holo.\n\n😅 Amra bhabbo je tader miss kori na.\n📦 Ekti kom legend group e."
             },
             hi: {
                 antiout_notice: "»» NOTICE ««\n{name} ne group chodne ki koshish ki, lekin Anti-Out active hai.\nSadasya ko wapas jod diya gaya hai.",
@@ -64,43 +56,26 @@ module.exports.run = async function ({ api, event, Users, Threads }) {
         
         const msg = messages[lang] || messages.en;
 
-        // If user was kicked by anti join, suppress leave message
         if (global.client.antiJoinKicked && global.client.antiJoinKicked.has(`${threadID}_${leftUserId}`)) {
             global.client.antiJoinKicked.delete(`${threadID}_${leftUserId}`);
             return;
         }
 
-        // If anti out is enabled and user left by self, re-add them
         if (antiout && leftBySelf) {
             try {
                 global.client.antiOutReadded.set(`${threadID}_${leftUserId}`, true);
-
                 setTimeout(() => {
                     global.client.antiOutReadded.delete(`${threadID}_${leftUserId}`);
                 }, 30000);
 
                 await api.addUserToGroup(leftUserId, threadID);
-
-                return api.sendMessage(
-                    msg.antiout_notice.replace("{name}", name),
-                    threadID
-                );
+                return api.sendMessage(msg.antiout_notice.replace("{name}", name), threadID);
             } catch (e) {
-                return api.sendMessage(
-                    msg.antiout_failed.replace("{name}", name),
-                    threadID
-                );
+                return api.sendMessage(msg.antiout_failed.replace("{name}", name), threadID);
             }
         }
 
-        // Normal goodbye message when anti out is off
-        let goodbyeMsg;
-        if (leftBySelf) {
-            goodbyeMsg = msg.goodbye_self.replace("{name}", name);
-        } else {
-            goodbyeMsg = msg.goodbye_kicked.replace("{name}", name);
-        }
-
+        let goodbyeMsg = leftBySelf ? msg.goodbye_self.replace("{name}", name) : msg.goodbye_kicked.replace("{name}", name);
         return api.sendMessage(goodbyeMsg, threadID);
         
     } catch (e) {
