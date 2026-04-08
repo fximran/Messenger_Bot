@@ -2,12 +2,12 @@ const fs = require("fs-extra");
 
 module.exports.config = {
     name: "bot",
-    version: "4.0.0",
+    version: "4.1.0",
     hasPermssion: 2,
     credits: "MQL1 Community",
-    description: "View bot info, reload config, logout, change language, toggle debug",
+    description: "View bot info, reload config, logout, change language, toggle debug, set bot nickname",
     commandCategory: "system",
-    usages: "bot | bot load | bot logout | bot language [en/bn/hi] | bot debug [on/off] | bot debug status",
+    usages: "bot | bot load | bot logout | bot language [en/bn/hi] | bot debug [on/off] | bot setmyname [name]",
     cooldowns: 5
 };
 
@@ -17,6 +17,46 @@ module.exports.run = async function({ api, event, args, Threads }) {
     
     if (!isBotAdmin && args[0] !== "bot") {
         return api.sendMessage("❌ Only bot admins can use this command!", threadID, messageID);
+    }
+    
+    // ========== SET BOT NAME (setmyname) ==========
+    if (args[0] === "setmyname") {
+        let newBotName = args.slice(1).join(" ");
+        
+        // যদি কোনো নাম না দেয়
+        if (!newBotName) {
+            return api.sendMessage(
+                `📝 SET BOT NAME\n━━━━━━━━━━━━━━━━━━━━\n\n` +
+                `📌 Usage:\n` +
+                `   • /bot setmyname [নাম] - কনফিগ ফাইলে বটের নাম সেট করবে\n` +
+                `   • /bot setmyname - বর্তমান নাম দেখাবে\n\n` +
+                `💡 Example: /bot setmyname My Awesome Bot`,
+                threadID, messageID
+            );
+        }
+        
+        // পুরনো নাম সেভ করে রাখি
+        const oldName = global.config.BOTNAME || "Bot";
+        
+        // কনফিগ আপডেট
+        global.config.BOTNAME = newBotName;
+        await fs.writeFileSync(global.client.configPath, JSON.stringify(global.config, null, 4));
+        
+        // বর্তমান গ্রুপে বটের নাম পরিবর্তন
+        try {
+            await api.changeNickname(newBotName, threadID, api.getCurrentUserID());
+        } catch(e) {
+            console.log("Nickname change error in current group:", e);
+        }
+        
+        return api.sendMessage(
+            `✅ BOT NAME UPDATED!\n━━━━━━━━━━━━━━━━━━━━\n\n` +
+            `📛 Old Name: ${oldName}\n` +
+            `🆕 New Name: ${newBotName}\n\n` +
+            `💡 The name has been saved to config.json and applied to this group.\n` +
+            `📌 When added to new groups, the bot will use this name.`,
+            threadID, messageID
+        );
     }
     
     // ========== CHANGE BOT LANGUAGE ==========
@@ -60,12 +100,10 @@ module.exports.run = async function({ api, event, args, Threads }) {
     if (args[0] === "debug") {
         const subCommand = args[1]?.toLowerCase();
         
-        // Initialize debug mode if not exists
         if (typeof global.debugMode === "undefined") {
             global.debugMode = false;
         }
         
-        // Show debug status
         if (subCommand === "status" || !subCommand) {
             const status = global.debugMode ? "✅ ENABLED" : "❌ DISABLED";
             const statusIcon = global.debugMode ? "🔴" : "⚫";
@@ -139,7 +177,6 @@ module.exports.run = async function({ api, event, args, Threads }) {
     const originalName = botInfo[botID].name || "Bot";
     const botProfileUrl = botInfo[botID].profileUrl || "No profile URL";
     
-    // Get bot nickname in current group
     let botNickname = originalName;
     try {
         const threadInfo = await api.getThreadInfo(threadID);
@@ -179,13 +216,13 @@ module.exports.run = async function({ api, event, args, Threads }) {
 
 💡 AVAILABLE COMMANDS (Bot Admin only):
 
-📝 /bot language [en/bn/hi] - Change bot language
+📝 /bot setmyname [name] - Set bot name in config & current group
+🌐 /bot language [en/bn/hi] - Change bot language
 🐛 /bot debug [on/off/status] - Toggle debug mode
 🔄 /bot load - Reload config
 🚪 /bot logout - Logout bot account
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🌐 Available Languages: English, বাংলা (Banglish), हिंदी (Hinglish)
     `;
     
     api.sendMessage(message, threadID, messageID);

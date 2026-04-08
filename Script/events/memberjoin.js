@@ -10,17 +10,14 @@ module.exports.run = async function ({ api, event, Threads }) {
     const { threadID } = event;
 
     try {
-        // If bot itself was added
+        // If bot itself was added - শুধু স্বাগতম মেসেজ দেবে, নাম চেঞ্জ করবে না
         if (event.logMessageData.addedParticipants.some(i => i.userFbId == api.getCurrentUserID())) {
             const threadData = (await Threads.getData(threadID)).data || {};
             const prefix = threadData.PREFIX || global.config.PREFIX || "/";
             
-            api.changeNickname(
-                `[ ${prefix} ] • ${!global.config.BOTNAME ? "Bot" : global.config.BOTNAME}`,
-                threadID,
-                api.getCurrentUserID()
-            );
-
+            // নাম পরিবর্তনের কোডটি সরিয়ে দেওয়া হয়েছে
+            // বট এখন তার নাম নিজে থেকে আর চেঞ্জ করবে না
+            
             return api.sendMessage(
                 `🤖 Thanks for adding me!\n\nI am now online and ready to work.\nType ${prefix}help to see commands.\n\nLet's make this group great! 😎`,
                 threadID
