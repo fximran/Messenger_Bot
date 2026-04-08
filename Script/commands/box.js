@@ -3,7 +3,7 @@ const moment = require("moment-timezone");
 
 module.exports.config = {
     name: "box",
-    version: "3.0.0",
+    version: "3.1.0",
     hasPermssion: 2,
     credits: "MQL1 Community",
     description: "Auto background import/export group members",
@@ -69,7 +69,7 @@ async function processImportQueue(api) {
         const task = importQueue[0];
         
         try {
-            const { filepath, filename, targetThreadID, authorID, members, currentIndex, addedCount, failedCount, startTime } = task;
+            const { filepath, filename, targetThreadID, authorID, members, currentIndex, addedCount, failedCount, startTime, requestThreadID } = task;
             
             // Initialize task if first time
             if (!task.currentIndex) {
@@ -78,8 +78,10 @@ async function processImportQueue(api) {
                 task.failedCount = 0;
                 task.startTime = Date.now();
                 
-                // Notify start
-                api.sendMessage(`🔄 Started background import from "${filename}"\n📊 Total: ${members.length} members\n⏱️ Will add 1 member every 10 seconds`, targetThreadID);
+                // Send start notification ONLY to the thread where command was issued
+                if (requestThreadID) {
+                    api.sendMessage(`🔄 Started background import from "${filename}"\n📊 Total: ${members.length} members\n⏱️ Will add 1 member every 10 seconds`, requestThreadID);
+                }
             }
             
             // Process one member
@@ -96,22 +98,22 @@ async function processImportQueue(api) {
                         task.failedCount++;
                     }
                 } else {
-                    task.addedCount++; // Already in group
+                    task.addedCount++;
                 }
                 
                 task.currentIndex++;
                 
-                // Update queue
                 importQueue[0] = task;
                 saveQueue();
                 
-                // Send progress update every 50 members
+                // Send progress update ONLY to request thread, every 50 members
                 if (task.currentIndex % 50 === 0 || task.currentIndex === members.length) {
-                    const percent = Math.floor((task.currentIndex / members.length) * 100);
-                    api.sendMessage(`📊 Import progress: ${task.currentIndex}/${members.length} (${percent}%)\n✅ Added: ${task.addedCount}\n❌ Failed: ${task.failedCount}`, targetThreadID);
+                    if (requestThreadID) {
+                        const percent = Math.floor((task.currentIndex / members.length) * 100);
+                        api.sendMessage(`📊 Import progress: ${task.currentIndex}/${members.length} (${percent}%)\n✅ Added: ${task.addedCount}\n❌ Failed: ${task.failedCount}`, requestThreadID);
+                    }
                 }
                 
-                // Wait 10 seconds before next member
                 await new Promise(resolve => setTimeout(resolve, 10000));
             }
             
@@ -121,23 +123,28 @@ async function processImportQueue(api) {
                 const minutes = Math.floor(elapsed / 60);
                 const seconds = elapsed % 60;
                 
-                api.sendMessage(
-                    `✅ IMPORT COMPLETED!\n\n` +
-                    `📛 File: ${filename}\n` +
-                    `📊 Total: ${members.length} members\n` +
-                    `✅ Added: ${task.addedCount}\n` +
-                    `❌ Failed: ${task.failedCount}\n` +
-                    `⏱️ Time taken: ${minutes}m ${seconds}s`,
-                    targetThreadID
-                );
+                // Send completion message ONLY to request thread
+                if (requestThreadID) {
+                    api.sendMessage(
+                        `✅ IMPORT COMPLETED!\n\n` +
+                        `📛 File: ${filename}\n` +
+                        `📊 Total: ${members.length} members\n` +
+                        `✅ Added: ${task.addedCount}\n` +
+                        `❌ Failed: ${task.failedCount}\n` +
+                        `⏱️ Time taken: ${minutes}m ${seconds}s`,
+                        requestThreadID
+                    );
+                }
                 
-                importQueue.shift(); // Remove completed task
+                importQueue.shift();
                 saveQueue();
             }
             
         } catch (error) {
             console.log("Import error:", error);
-            api.sendMessage(`❌ Import failed for "${task.filename}": ${error.message}`, task.targetThreadID);
+            if (task.requestThreadID) {
+                api.sendMessage(`❌ Import failed for "${task.filename}": ${error.message}`, task.requestThreadID);
+            }
             importQueue.shift();
             saveQueue();
         }
@@ -163,16 +170,14 @@ async function processExportQueue(api) {
         const task = exportQueue[0];
         
         try {
-            const { groupId, groupName, authorID, threadID, totalMembers, currentIndex, membersData, existingMemberIds, startTime } = task;
+            const { groupId, groupName, authorID, threadID, totalMembers, currentIndex, membersData, existingMemberIds, startTime, requestThreadID } = task;
             
-            // Initialize task if first time
             if (!task.currentIndex) {
                 task.currentIndex = 0;
                 task.membersData = [];
                 task.existingMemberIds = new Set();
                 task.startTime = Date.now();
                 
-                // Check if group already has export file
                 const existing = getFilePathByGroupId(groupId);
                 if (existing) {
                     for (const m of existing.data.members) {
@@ -181,15 +186,16 @@ async function processExportQueue(api) {
                     }
                 }
                 
-                api.sendMessage(`🔄 Started background export for "${groupName}"\n📊 Total members to process: ${totalMembers}\n⏱️ Will process 1 member every 5 seconds`, threadID);
+                // Send start notification ONLY to request thread
+                if (requestThreadID) {
+                    api.sendMessage(`🔄 Started background export for "${groupName}"\n📊 Total members to process: ${totalMembers}\n⏱️ Will process 1 member every 5 seconds`, requestThreadID);
+                }
             }
             
-            // Get thread info to fetch participants
             const threadInfo = await api.getThreadInfo(groupId);
             const participants = threadInfo.participantIDs || [];
             const adminIds = threadInfo.adminIDs ? threadInfo.adminIDs.map(a => a.id) : [];
             
-            // Process one member at current index
             if (task.currentIndex < participants.length) {
                 const uid = participants[task.currentIndex];
                 
@@ -215,7 +221,6 @@ async function processExportQueue(api) {
                         task.membersData.push(memberInfo);
                         task.existingMemberIds.add(uid);
                     } else {
-                        // Update existing member info
                         const index = task.membersData.findIndex(m => m.id === uid);
                         if (index !== -1) {
                             task.membersData[index] = memberInfo;
@@ -238,41 +243,46 @@ async function processExportQueue(api) {
                 exportQueue[0] = task;
                 saveQueue();
                 
-                // Send progress update every 100 members
+                // Send progress update ONLY to request thread, every 100 members
                 if (task.currentIndex % 100 === 0 || task.currentIndex === participants.length) {
-                    const percent = Math.floor((task.currentIndex / participants.length) * 100);
-                    api.sendMessage(`📊 Export progress: ${task.currentIndex}/${participants.length} (${percent}%)\n📝 Members processed: ${task.membersData.length}`, threadID);
+                    if (requestThreadID) {
+                        const percent = Math.floor((task.currentIndex / participants.length) * 100);
+                        api.sendMessage(`📊 Export progress: ${task.currentIndex}/${participants.length} (${percent}%)\n📝 Members processed: ${task.membersData.length}`, requestThreadID);
+                    }
                 }
                 
-                // Wait 5 seconds before next member
                 await new Promise(resolve => setTimeout(resolve, 5000));
             }
             
-            // Task complete - save file
             if (task.currentIndex >= participants.length) {
                 const result = await saveOrUpdateExport(groupId, groupName, task.membersData);
                 const elapsed = Math.floor((Date.now() - task.startTime) / 1000);
                 const minutes = Math.floor(elapsed / 60);
                 const seconds = elapsed % 60;
                 
-                api.sendMessage(
-                    `✅ EXPORT COMPLETED!\n\n` +
-                    `📛 Group: ${groupName}\n` +
-                    `🆔 ID: ${groupId}\n` +
-                    `📦 File: ${result.filename}\n` +
-                    `👥 Total Members: ${task.membersData.length}\n` +
-                    `⏱️ Time taken: ${minutes}m ${seconds}s\n\n` +
-                    `💡 Use /box file list to see all exported files.`,
-                    threadID
-                );
+                // Send completion message ONLY to request thread
+                if (requestThreadID) {
+                    api.sendMessage(
+                        `✅ EXPORT COMPLETED!\n\n` +
+                        `📛 Group: ${groupName}\n` +
+                        `🆔 ID: ${groupId}\n` +
+                        `📦 File: ${result.filename}\n` +
+                        `👥 Total Members: ${task.membersData.length}\n` +
+                        `⏱️ Time taken: ${minutes}m ${seconds}s\n\n` +
+                        `💡 Use /box file list to see all exported files.`,
+                        requestThreadID
+                    );
+                }
                 
-                exportQueue.shift(); // Remove completed task
+                exportQueue.shift();
                 saveQueue();
             }
             
         } catch (error) {
             console.log("Export error:", error);
-            api.sendMessage(`❌ Export failed for "${task.groupName}": ${error.message}`, task.threadID);
+            if (task.requestThreadID) {
+                api.sendMessage(`❌ Export failed for "${task.groupName}": ${error.message}`, task.requestThreadID);
+            }
             exportQueue.shift();
             saveQueue();
         }
@@ -330,7 +340,11 @@ module.exports.handleReply = async function ({ api, event, Threads, handleReply 
     const { threadID, messageID, senderID, body } = event;
     const { author, type, groups, exportData } = handleReply;
     
+    // Silent return if not the author
     if (senderID != author) return;
+    
+    const isBotAdmin = global.config.ADMINBOT.includes(senderID);
+    const isSuperAdmin = global.config.ADMINBOT.includes(senderID);
     
     let num = null;
     const numberMatch = body.match(/\d+/);
@@ -344,18 +358,15 @@ module.exports.handleReply = async function ({ api, event, Threads, handleReply 
     
     // ========== STOP QUEUE ITEM ==========
     if (isStop && type === "queue_action") {
+        // Only bot admins can stop queue tasks
+        if (!isBotAdmin) return;
+        
         const parts = body.toLowerCase().split(" ");
-        const taskType = parts[1]; // "import" or "export"
+        const taskType = parts[1];
         const taskNum = parseInt(parts[2]);
         
         if (!taskType || (taskType !== "import" && taskType !== "export")) {
-            return api.sendMessage(
-                `❌ Please specify type!\n\n` +
-                `Examples:\n` +
-                `• stop import 1 - Stop import task #1\n` +
-                `• stop export 1 - Stop export task #1`,
-                threadID, messageID
-            );
+            return api.sendMessage(`❌ Please specify type!\n\nExamples:\n• stop import 1\n• stop export 1`, threadID, messageID);
         }
         
         if (isNaN(taskNum) || taskNum < 1) {
@@ -384,6 +395,9 @@ module.exports.handleReply = async function ({ api, event, Threads, handleReply 
     
     // ========== DELETE FILE ==========
     if (isDeleteFile && type === "file_list_action") {
+        // Only bot admins can delete files
+        if (!isBotAdmin) return;
+        
         if (isDeleteAll) {
             const files = fs.readdirSync(exportPath).filter(f => f.endsWith(".json"));
             let deletedCount = 0;
@@ -417,13 +431,15 @@ module.exports.handleReply = async function ({ api, event, Threads, handleReply 
     
     // ========== EXPORT (ACTIVE LIST REPLY) ==========
     if (type === "active_list_export") {
+        // Only bot admins can export
+        if (!isBotAdmin) return;
+        
         if (isNaN(num) || num < 1 || num > groups.length) {
             return api.sendMessage(`❌ Invalid number! Please reply with a valid group number.`, threadID, messageID);
         }
         
         const selectedGroup = groups[num - 1];
         
-        // Check if already in queue
         const alreadyInQueue = exportQueue.some(q => q.groupId === selectedGroup.id);
         if (alreadyInQueue) {
             return api.sendMessage(`⚠️ "${selectedGroup.name}" is already in the export queue!`, threadID, messageID);
@@ -441,7 +457,8 @@ module.exports.handleReply = async function ({ api, event, Threads, handleReply 
             currentIndex: 0,
             membersData: [],
             existingMemberIds: new Set(),
-            startTime: null
+            startTime: null,
+            requestThreadID: threadID
         });
         
         saveQueue();
@@ -454,136 +471,181 @@ module.exports.handleReply = async function ({ api, event, Threads, handleReply 
             threadID, messageID
         );
         
-        // Start processor if not running
         if (!isExportRunning) {
             processExportQueue(api);
         }
         return;
     }
     
-    // ========== FILE LIST ACTIONS (show id, show info, create, import) ==========
+    // ========== FILE LIST ACTIONS ==========
     else if (type === "file_list_action") {
         const isShowId = body.toLowerCase().includes("show id") || body.toLowerCase().includes("showid");
         const isShowInfo = body.toLowerCase().includes("show info") || body.toLowerCase().includes("showinfo");
         const isCreate = body.toLowerCase().includes("create");
         const isImport = body.toLowerCase().includes("import");
         
-        if (!isShowId && !isShowInfo && !isCreate && !isImport) {
-            return api.sendMessage(`❌ Invalid command!`, threadID, messageID);
-        }
-        
-        if (isNaN(num) || num < 1 || num > exportData.files.length) {
-            return api.sendMessage(`❌ Invalid number!`, threadID, messageID);
-        }
-        
-        const selectedFile = exportData.files[num - 1];
-        const filepath = exportPath + selectedFile;
-        
-        if (!fs.existsSync(filepath)) {
-            return api.sendMessage(`❌ File not found!`, threadID, messageID);
-        }
-        
-        const fileContent = await fs.readFileSync(filepath, "utf8");
-        const data = JSON.parse(fileContent);
-        
-        // SHOW ID
-        if (isShowId) {
-            let idList = "";
-            for (let i = 0; i < data.members.length; i++) {
-                idList += data.members[i].id + " ";
-            }
-            const msg = `📋 MEMBERS ID LIST\n━━━━━━━━━━━━━━━━━━━━\n📛 ${data.groupName}\n👥 Total: ${data.totalMembers}\n━━━━━━━━━━━━━━━━━━━━\n\n${idList.trim()}`;
-            return api.sendMessage(msg, threadID, messageID);
-        }
-        
-        // SHOW INFO
-        if (isShowInfo) {
-            let msg = `📋 MEMBERS FULL INFO\n━━━━━━━━━━━━━━━━━━━━\n📛 ${data.groupName}\n👥 Total: ${data.totalMembers}\n━━━━━━━━━━━━━━━━━━━━\n\n`;
-            for (let i = 0; i < data.members.length; i++) {
-                const m = data.members[i];
-                msg += `👤 ${i+1}. ${m.name}\n   🆔 ${m.id}\n   📛 @${m.username}\n   ⚧ ${m.gender}\n   ───────────────────\n`;
-            }
-            return api.sendMessage(msg, threadID, messageID);
-        }
-        
-        // CREATE NEW GROUP
-        if (isCreate) {
-            let groupName = body.replace(/create\s+\d+/i, "").trim();
-            if (!groupName) {
-                return api.sendMessage(`❌ Please provide a group name!\nExample: create 1 My Group`, threadID, messageID);
+        // Show ID and Show Info - anyone can view (no permission check)
+        if (isShowId || isShowInfo) {
+            if (isNaN(num) || num < 1 || num > exportData.files.length) {
+                return api.sendMessage(`❌ Invalid number!`, threadID, messageID);
             }
             
-            const memberIds = data.members.map(m => m.id);
-            api.sendMessage(`⏳ Creating group "${groupName}" with ${memberIds.length} members...`, threadID, messageID);
+            const selectedFile = exportData.files[num - 1];
+            const filepath = exportPath + selectedFile;
             
-            try {
-                const newGroup = await api.createNewGroup(memberIds, groupName);
-                let newThreadID = newGroup.threadID || newGroup.id;
-                await new Promise(resolve => setTimeout(resolve, 3000));
-                if (newThreadID) {
-                    await api.changeAdminStatus(newThreadID, senderID, true);
+            if (!fs.existsSync(filepath)) {
+                return api.sendMessage(`❌ File not found!`, threadID, messageID);
+            }
+            
+            const fileContent = await fs.readFileSync(filepath, "utf8");
+            const data = JSON.parse(fileContent);
+            
+            if (isShowId) {
+                let idList = "";
+                for (let i = 0; i < data.members.length; i++) {
+                    idList += data.members[i].id + " ";
                 }
-                return api.sendMessage(`✅ Created "${groupName}"!\n👑 You are admin.\n👥 ${memberIds.length} members`, threadID, messageID);
-            } catch (error) {
-                return api.sendMessage(`❌ Failed: ${error.message}`, threadID, messageID);
+                const msg = `📋 MEMBERS ID LIST\n━━━━━━━━━━━━━━━━━━━━\n📛 ${data.groupName}\n👥 Total: ${data.totalMembers}\n━━━━━━━━━━━━━━━━━━━━\n\n${idList.trim()}`;
+                return api.sendMessage(msg, threadID, messageID);
+            }
+            
+            if (isShowInfo) {
+                let msg = `📋 MEMBERS FULL INFO\n━━━━━━━━━━━━━━━━━━━━\n📛 ${data.groupName}\n👥 Total: ${data.totalMembers}\n━━━━━━━━━━━━━━━━━━━━\n\n`;
+                for (let i = 0; i < data.members.length; i++) {
+                    const m = data.members[i];
+                    msg += `👤 ${i+1}. ${m.name}\n   🆔 ${m.id}\n   📛 @${m.username}\n   ⚧ ${m.gender}\n   ───────────────────\n`;
+                }
+                return api.sendMessage(msg, threadID, messageID);
             }
         }
         
-        // IMPORT TO CURRENT GROUP
-        if (isImport) {
-            const currentGroupInfo = await api.getThreadInfo(threadID);
-            const currentMembers = currentGroupInfo.participantIDs || [];
-            const isBotAdmin = currentGroupInfo.adminIDs.some(a => a.id == api.getCurrentUserID());
-            
-            if (!isBotAdmin) {
-                return api.sendMessage(`❌ Bot needs to be admin in this group!`, threadID, messageID);
+        // Create, Import, Delete - require bot admin permission
+        if (!isBotAdmin) return;
+        
+        if (isCreate || isImport || isDeleteFile) {
+            if (isNaN(num) || num < 1 || num > exportData.files.length) {
+                return api.sendMessage(`❌ Invalid number!`, threadID, messageID);
             }
             
-            const membersToAdd = [];
-            const botId = api.getCurrentUserID();
+            const selectedFile = exportData.files[num - 1];
+            const filepath = exportPath + selectedFile;
             
-            for (const member of data.members) {
-                if (!currentMembers.includes(member.id) && member.id !== botId) {
-                    membersToAdd.push(member.id);
+            if (!fs.existsSync(filepath)) {
+                return api.sendMessage(`❌ File not found!`, threadID, messageID);
+            }
+            
+            const fileContent = await fs.readFileSync(filepath, "utf8");
+            const data = JSON.parse(fileContent);
+            
+            // CREATE NEW GROUP
+            if (isCreate) {
+                let groupName = body.replace(/create\s+\d+/i, "").trim();
+                if (!groupName) {
+                    return api.sendMessage(`❌ Please provide a group name!\nExample: create 1 My Group`, threadID, messageID);
+                }
+                
+                const memberIds = data.members.map(m => m.id);
+                api.sendMessage(`⏳ Creating group "${groupName}" with ${memberIds.length} members...`, threadID, messageID);
+                
+                try {
+                    const newGroup = await api.createNewGroup(memberIds, groupName);
+                    let newThreadID = newGroup.threadID || newGroup.id;
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    if (newThreadID) {
+                        await api.changeAdminStatus(newThreadID, senderID, true);
+                    }
+                    return api.sendMessage(`✅ Created "${groupName}"!\n👑 You are admin.\n👥 ${memberIds.length} members`, threadID, messageID);
+                } catch (error) {
+                    return api.sendMessage(`❌ Failed: ${error.message}`, threadID, messageID);
                 }
             }
             
-            if (membersToAdd.length === 0) {
-                return api.sendMessage(`❌ No new members to add!`, threadID, messageID);
+            // IMPORT TO CURRENT GROUP OR SPECIFIED GROUP
+            if (isImport) {
+                let targetGroupID = threadID;
+                let targetGroupName = "current group";
+                
+                const parts = body.trim().split(/\s+/);
+                if (parts.length >= 3) {
+                    const providedGroupID = parts[2];
+                    if (/^\d+$/.test(providedGroupID)) {
+                        targetGroupID = providedGroupID;
+                        targetGroupName = `group ${targetGroupID}`;
+                        
+                        try {
+                            const targetThreadInfo = await api.getThreadInfo(targetGroupID);
+                            if (!targetThreadInfo) {
+                                return api.sendMessage(`❌ Bot is not in group ${targetGroupID} or group doesn't exist!`, threadID, messageID);
+                            }
+                            targetGroupName = targetThreadInfo.threadName || targetGroupID;
+                        } catch(e) {
+                            return api.sendMessage(`❌ Cannot access group ${targetGroupID}. Make sure bot is in that group.`, threadID, messageID);
+                        }
+                    } else {
+                        return api.sendMessage(`❌ Invalid group ID! Please provide a numeric group ID.\nExample: import 1 123456789`, threadID, messageID);
+                    }
+                }
+                
+                try {
+                    const targetGroupInfo = await api.getThreadInfo(targetGroupID);
+                    const isBotAdminInTarget = targetGroupInfo.adminIDs.some(a => a.id == api.getCurrentUserID());
+                    
+                    if (!isBotAdminInTarget) {
+                        return api.sendMessage(`❌ Bot needs to be admin in ${targetGroupName} to add members!`, threadID, messageID);
+                    }
+                } catch(e) {
+                    return api.sendMessage(`❌ Cannot verify bot admin status in ${targetGroupName}.`, threadID, messageID);
+                }
+                
+                const currentGroupInfo = await api.getThreadInfo(targetGroupID);
+                const currentMembers = currentGroupInfo.participantIDs || [];
+                
+                const membersToAdd = [];
+                const botId = api.getCurrentUserID();
+                
+                for (const member of data.members) {
+                    if (!currentMembers.includes(member.id) && member.id !== botId) {
+                        membersToAdd.push(member.id);
+                    }
+                }
+                
+                if (membersToAdd.length === 0) {
+                    return api.sendMessage(`❌ No new members to add to ${targetGroupName}!`, threadID, messageID);
+                }
+                
+                const alreadyInQueue = importQueue.some(q => q.filename === selectedFile && q.targetThreadID === targetGroupID);
+                if (alreadyInQueue) {
+                    return api.sendMessage(`⚠️ "${selectedFile}" is already in the import queue for ${targetGroupName}!`, threadID, messageID);
+                }
+                
+                importQueue.push({
+                    filepath: filepath,
+                    filename: selectedFile,
+                    targetThreadID: targetGroupID,
+                    authorID: senderID,
+                    members: membersToAdd,
+                    currentIndex: 0,
+                    addedCount: 0,
+                    failedCount: 0,
+                    startTime: null,
+                    requestThreadID: threadID
+                });
+                
+                saveQueue();
+                
+                api.sendMessage(
+                    `✅ Added "${selectedFile}" to import queue for ${targetGroupName}!\n\n` +
+                    `📊 Members to add: ${membersToAdd.length}\n` +
+                    `⏱️ Will add 1 member every 10 seconds\n` +
+                    `📌 Use /box queue to check status`,
+                    threadID, messageID
+                );
+                
+                if (!isImportRunning) {
+                    processImportQueue(api);
+                }
+                return;
             }
-            
-            // Check if already in queue
-            const alreadyInQueue = importQueue.some(q => q.filename === selectedFile);
-            if (alreadyInQueue) {
-                return api.sendMessage(`⚠️ "${selectedFile}" is already in the import queue!`, threadID, messageID);
-            }
-            
-            importQueue.push({
-                filepath: filepath,
-                filename: selectedFile,
-                targetThreadID: threadID,
-                authorID: senderID,
-                members: membersToAdd,
-                currentIndex: 0,
-                addedCount: 0,
-                failedCount: 0,
-                startTime: null
-            });
-            
-            saveQueue();
-            
-            api.sendMessage(
-                `✅ Added "${selectedFile}" to import queue!\n\n` +
-                `📊 Members to add: ${membersToAdd.length}\n` +
-                `⏱️ Will add 1 member every 10 seconds\n` +
-                `📌 Use /box queue to check status`,
-                threadID, messageID
-            );
-            
-            if (!isImportRunning) {
-                processImportQueue(api);
-            }
-            return;
         }
     }
 };
@@ -592,9 +654,9 @@ module.exports.run = async function ({ api, event, args, Threads }) {
     const { threadID, messageID, senderID } = event;
     
     const isBotAdmin = global.config.ADMINBOT.includes(senderID);
-    if (!isBotAdmin) {
-        return api.sendMessage("❌ Bot Admins only!", threadID, messageID);
-    }
+    
+    // All commands here require bot admin permission - silent fail for non-admins
+    if (!isBotAdmin) return;
     
     // ========== QUEUE STATUS ==========
     if (args[0] === "queue") {
@@ -763,7 +825,7 @@ module.exports.run = async function ({ api, event, args, Threads }) {
                 }
             }
             
-            msg += `\n💡 Commands:\n   • show id [num] - Show only IDs (one line)\n   • show info [num] - Show full info\n   • create [num] [name] - Create new group\n   • import [num] - Add members to current group\n   • delete [num] - Delete file\n   • delete all - Delete all files\n\n📌 /box queue - Check background tasks`;
+            msg += `\n💡 Commands:\n   • show id [num] - Show only IDs (one line)\n   • show info [num] - Show full info\n   • create [num] [name] - Create new group\n   • import [num] - Add members to current group\n   • import [num] [groupID] - Add members to specific group\n   • delete [num] - Delete file\n   • delete all - Delete all files\n\n📌 /box queue - Check background tasks`;
             
             api.sendMessage(msg, threadID, (error, info) => {
                 if (!error) {
@@ -790,7 +852,7 @@ module.exports.run = async function ({ api, event, args, Threads }) {
             `📦 /box active list - Show groups\n   Reply number - Export (background)\n\n` +
             `📁 /box file list - Show files\n   show id/info | create | import | delete\n\n` +
             `📋 /box queue - Check background tasks\n   stop import/export [num] - Stop a task\n\n` +
-            `⚡ Features:\n   • Background import (1 member/10 sec)\n   • Background export (1 member/5 sec)\n   • Other commands work during tasks\n   • Resume after bot restart\n\n` +
+            `⚡ Features:\n   • Background import (1 member/10 sec)\n   • Background export (1 member/5 sec)\n   • Progress reports only go to requester\n   • Resume after bot restart\n\n` +
             `👑 Bot Admins only`,
             threadID, messageID
         );

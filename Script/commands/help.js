@@ -1,18 +1,32 @@
 module.exports.config = {
     name: "help",
-    version: "3.0.0",
+    version: "3.1.0",
     hasPermssion: 0,
     credits: "MQL1 Community",
-    description: "Show all bot commands",
+    description: "Show all bot commands (filtered by permission)",
     commandCategory: "system",
     usages: "[command name]",
     cooldowns: 5
 };
 
 module.exports.run = async function({ api, event, args }) {
-    const { threadID, messageID } = event;
+    const { threadID, messageID, senderID } = event;
     const { commands } = global.client;
     const prefix = global.config.PREFIX || "/";
+    
+    // Get user's permission level in current group
+    let userPermission = 0;
+    try {
+        const threadInfo = await api.getThreadInfo(threadID);
+        const isGroupAdmin = threadInfo.adminIDs.some(item => item.id == senderID);
+        const isSuperAdmin = global.config.ADMINBOT.includes(senderID);
+        
+        if (isSuperAdmin) userPermission = 2;
+        else if (isGroupAdmin) userPermission = 1;
+        else userPermission = 0;
+    } catch(e) {
+        userPermission = 0;
+    }
     
     // Get thread specific prefix if exists
     const threadSetting = global.data.threadData.get(parseInt(threadID)) || {};
@@ -28,6 +42,7 @@ module.exports.run = async function({ api, event, args }) {
             title: "🤖 BOT COMMANDS",
             prefix: "Prefix",
             total: "Total Commands",
+            available: "Available for you",
             usage: "Usage",
             example: "Example",
             description: "Description",
@@ -41,6 +56,10 @@ module.exports.run = async function({ api, event, args }) {
             bot_admin: "Bot Admin",
             no_desc: "No description",
             tip: "💡 Tip: Use {prefix}help [command] for details",
+            permission_level: "Your Permission Level",
+            level_0: "Member",
+            level_1: "Group Admin",
+            level_2: "Bot Admin (Super Admin)",
             categories: {
                 "system": "⚙️ SYSTEM",
                 "Admin": "👑 ADMIN",
@@ -59,6 +78,7 @@ module.exports.run = async function({ api, event, args }) {
             title: "🤖 BOT COMMANDS",
             prefix: "Prefix",
             total: "Total Commands",
+            available: "Apnar jonno available",
             usage: "Use korte",
             example: "Example",
             description: "Biboron",
@@ -72,6 +92,10 @@ module.exports.run = async function({ api, event, args }) {
             bot_admin: "Bot Admin",
             no_desc: "Kichu description nei",
             tip: "💡 Tip: {prefix}help [command] diye details dekhte parben",
+            permission_level: "Apnar Permission Level",
+            level_0: "Member",
+            level_1: "Group Admin",
+            level_2: "Bot Admin (Super Admin)",
             categories: {
                 "system": "⚙️ SYSTEM",
                 "Admin": "👑 ADMIN",
@@ -90,6 +114,7 @@ module.exports.run = async function({ api, event, args }) {
             title: "🤖 BOT COMMANDS",
             prefix: "Prefix",
             total: "Total Commands",
+            available: "Aapke liye available",
             usage: "Use karein",
             example: "Example",
             description: "Vivaran",
@@ -103,6 +128,10 @@ module.exports.run = async function({ api, event, args }) {
             bot_admin: "Bot Admin",
             no_desc: "Koi description nahi",
             tip: "💡 Tip: {prefix}help [command] se details dekhein",
+            permission_level: "Aapka Permission Level",
+            level_0: "Member",
+            level_1: "Group Admin",
+            level_2: "Bot Admin (Super Admin)",
             categories: {
                 "system": "⚙️ SYSTEM",
                 "Admin": "👑 ADMIN",
@@ -126,6 +155,13 @@ module.exports.run = async function({ api, event, args }) {
         return msg.categories[category] || msg.categories["Uncategorized"];
     }
     
+    // Get permission level name
+    function getPermissionLevel(level) {
+        if (level === 2) return msg.bot_admin;
+        if (level === 1) return msg.group_admin;
+        return msg.everyone;
+    }
+    
     // ========== SPECIFIC COMMAND INFO ==========
     if (args[0]) {
         const command = commands.get(args[0].toLowerCase());
@@ -134,8 +170,15 @@ module.exports.run = async function({ api, event, args }) {
         }
         
         const config = command.config;
-        const permission = config.hasPermssion == 0 ? msg.everyone : 
-                          (config.hasPermssion == 1 ? msg.group_admin : msg.bot_admin);
+        const requiredPerm = config.hasPermssion || 0;
+        
+        // Check if user has permission to see this command
+        if (userPermission < requiredPerm) {
+            return api.sendMessage(`❌ You don't have permission to view details of "${args[0]}" command!`, threadID, messageID);
+        }
+        
+        const permission = requiredPerm == 0 ? msg.everyone : 
+                          (requiredPerm == 1 ? msg.group_admin : msg.bot_admin);
         
         const infoMsg = 
             `📖 ${config.name.toUpperCase()}\n━━━━━━━━━━━━━━━━\n\n` +
@@ -151,15 +194,22 @@ module.exports.run = async function({ api, event, args }) {
         return api.sendMessage(infoMsg, threadID, messageID);
     }
     
-    // ========== SHOW ALL COMMANDS BY CATEGORY ==========
+    // ========== SHOW ALL COMMANDS BY CATEGORY (FILTERED BY PERMISSION) ==========
     let categories = {};
+    let totalAvailableCommands = 0;
     
     for (const [name, command] of commands) {
-        const category = command.config.commandCategory || "Uncategorized";
-        if (!categories[category]) {
-            categories[category] = [];
+        const requiredPerm = command.config.hasPermssion || 0;
+        
+        // Only show commands that user has permission to use
+        if (userPermission >= requiredPerm) {
+            const category = command.config.commandCategory || "Uncategorized";
+            if (!categories[category]) {
+                categories[category] = [];
+            }
+            categories[category].push(name);
+            totalAvailableCommands++;
         }
-        categories[category].push(name);
     }
     
     // Define category order
@@ -174,16 +224,18 @@ module.exports.run = async function({ api, event, args }) {
         return a.localeCompare(b);
     });
     
-    let totalCommands = 0;
-    for (const cat of sortedCategories) {
-        totalCommands += categories[cat].length;
-    }
+    // Permission level display name
+    let permissionLevelName = "";
+    if (userPermission === 2) permissionLevelName = msg.level_2;
+    else if (userPermission === 1) permissionLevelName = msg.level_1;
+    else permissionLevelName = msg.level_0;
     
     let resultMsg = `╔════════════════════════╗\n`;
     resultMsg += `║     ${msg.title}     ║\n`;
     resultMsg += `╚════════════════════════╝\n\n`;
     resultMsg += `📌 ${msg.prefix}: ${actualPrefix}\n`;
-    resultMsg += `📊 ${msg.total}: ${totalCommands}\n`;
+    resultMsg += `👑 ${msg.permission_level}: ${permissionLevelName}\n`;
+    resultMsg += `📊 ${msg.available}: ${totalAvailableCommands} / ${commands.size}\n`;
     resultMsg += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
     
     for (const category of sortedCategories) {
