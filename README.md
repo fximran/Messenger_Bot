@@ -1,131 +1,148 @@
+cat << 'EOF' > README.md
+
 # 🚀 Messenger Bot - Complete Server Setup Guide
 
-A custom-edited Facebook Messenger bot based on the **CYBER-BOT-COMMUNITY** source project.
+A custom-edited Facebook Messenger bot based on the CYBER-BOT-COMMUNITY source project.
 
 ---
 
 ## 📌 Overview
 
-This repository is a **modified and simplified version** of the original project.  
+This repository is a modified and simplified version of the original project.  
 Unnecessary commands, files, and features have been removed to make it:
 
-- ⚡ Lightweight
-- 🧹 Clean & structured
-- 🔧 Easy to customize
+- Lightweight
+- Clean & structured
+- Easy to customize
 
-> This project is mainly intended for **personal use, testing, and learning purposes**.
+This project is mainly intended for personal use, testing, and learning purposes.
 
 ---
 
 ## ✨ Features
 
-- 🛠️ Custom edited bot system
-- ⚡ Lightweight & fast setup
-- 🧹 Clean project structure
-- 🔌 Easy to extend & customize
-- 📡 Command-based interaction system
-- 🔁 24/7 running support using **PM2**
+- Custom edited bot system
+- Lightweight & fast setup
+- Clean project structure
+- Easy to extend & customize
+- Command-based interaction system
+- 24/7 running support using PM2
 
 ---
 
 ## 📋 Requirements
 
-| Requirement | Version                  |
-| ----------- | ------------------------ |
-| Node.js     | 20.18.1 or higher        |
-| npm         | 10.0.0 or higher         |
-| PM2         | Latest version           |
-| OS          | Ubuntu / Debian / CentOS |
+- Node.js → 20.18.1 or higher
+- npm → 10.0.0 or higher
+- PM2 → Latest version
+- OS → Ubuntu / Debian / CentOS
 
 ---
 
-## ⚙️ Complete Installation Guide
+## ⚙️ Installation
 
-### 🔹 Step 1: Install Node.js, Git & PM2
-
-```bash
-sudo apt update && sudo apt upgrade -y
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs git
+sudo apt update && sudo apt upgrade -y  
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -  
+sudo apt install -y nodejs git  
 npm install -g pm2
-```
 
----
-
-### 🔹 Step 2: Download & Install Bot
-
-```bash
-git clone https://github.com/fximran/Messenger_Bot
-cd Messenger_Bot
+git clone https://github.com/fximran/Messenger_Bot  
+cd Messenger_Bot  
 npm install
-```
 
 ---
 
-### 🔹 Step 3: Configure Bot
+## ⚙️ Configure Bot
 
-```bash
-cp config.json.example config.json
+cp config.json.example config.json  
 nano config.json
-```
 
-Edit the following values:
-
-- `ADMINBOT` → Your Facebook User ID
-- `BOTNAME` → Your bot name
-- `PREFIX` → Command prefix (default: `/`)
-- `language` → `en` / `bn` / `hi`
+Edit:  
+ADMINBOT → Your Facebook ID  
+BOTNAME → Bot name  
+PREFIX → Command prefix  
+language → en / bn / hi
 
 ---
 
-### 🔹 Step 4: Run Bot with PM2 (24/7)
+# 🔁 Run Methods
 
-```bash
+## 🚫 Method 1: Without Keepalive (Manual)
+
+Step 1: Generate Appstate  
+Browser থেকে cookie নিয়ে appstate.json বানান
+
+Step 2: Start Bot  
 pm2 start Jarvis.js --name messenger-bot
-pm2 save
-pm2 startup
-```
+
+Step 3: Session Expire হলে  
+নতুন cookie দিয়ে appstate.json আপডেট করুন
+
+pm2 restart messenger-bot
 
 ---
 
-## 📊 PM2 Management Commands
+## 🔁 Method 2: With Keepalive (Auto Refresh)
 
-| Action       | Command                     |
-| ------------ | --------------------------- |
-| Check status | `pm2 list`                  |
-| View logs    | `pm2 logs messenger-bot`    |
-| Stop bot     | `pm2 stop messenger-bot`    |
-| Restart bot  | `pm2 restart messenger-bot` |
-| Delete bot   | `pm2 delete messenger-bot`  |
-| Monitor      | `pm2 monit`                 |
+Step 1: Create Keepalive File  
+nano keepalive.js
+
+Email & Password দিন
+
+Step 2: Start Keepalive  
+pm2 start keepalive.js --name session-keepalive
+
+Step 3: Start Bot  
+pm2 start Jarvis.js --name messenger-bot
+
+এরপর আর কিছু করার দরকার নেই (auto refresh হবে)
+
+---
+
+# 📊 PM2 Commands
+
+Start  
+pm2 start Jarvis.js --name messenger-bot  
+pm2 start keepalive.js --name session-keepalive
+
+Restart  
+pm2 restart messenger-bot  
+pm2 restart session-keepalive
+
+Stop  
+pm2 stop messenger-bot  
+pm2 stop session-keepalive
+
+Delete  
+pm2 delete messenger-bot  
+pm2 delete session-keepalive
+
+Status  
+pm2 list
+
+Logs  
+pm2 logs messenger-bot  
+pm2 logs session-keepalive
 
 ---
 
 ## ⚠️ Important Notes
 
-- ✅ Make sure `config.json` is properly configured
-- ✅ Ensure your **appstate** is valid and up-to-date
-- ❗ Without correct appstate, the bot will not work
+- appstate.json ছাড়া bot চলবে না
+- Keepalive ব্যবহার করলে auto session refresh হবে
+- Login info secure রাখুন
 
 ---
 
 ## 🙏 Credits
 
-- **Base Source:** CYBER-BOT-COMMUNITY
-- **Modified By:** fximran
+CYBER-BOT-COMMUNITY  
+Modified by fximran
 
 ---
 
 ## ⚠️ Disclaimer
 
-This project is shared for **educational and personal use only**.  
-Use it responsibly. The author is not responsible for misuse or any violation of platform policies.
+Educational purpose only. Use at your own risk.
 
----
-
-## 💡 Future Improvements (Optional)
-
-- 🤖 AI integration (ChatGPT / local LLM)
-- 🧠 Smart auto-reply system
-- 🧩 Plugin-based command system
-- 📊 User tracking / database system
+EOF
