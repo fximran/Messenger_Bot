@@ -3,12 +3,12 @@ const moment = require("moment-timezone");
 
 module.exports.config = {
     name: "box",
-    version: "3.1.0",
+    version: "4.1.0",
     hasPermssion: 2,
     credits: "MQL1 Community",
-    description: "Auto background import/export group members",
+    description: "Import/Export group members (batch mode - safe)",
     commandCategory: "Admin",
-    usages: "active list | file list | export [num] | show id [num] | show info [num] | create [num] [name] | import [num] | queue | stop import/export [num]",
+    usages: "active list | file list | export [num] | show id [num] | create [num] [name] | import [num] | queue | stop import [num]",
     cooldowns: 5
 };
 
@@ -20,11 +20,9 @@ if (!fs.existsSync(exportPath)) {
     fs.mkdirSync(exportPath, { recursive: true });
 }
 
-// ========== QUEUE SYSTEM ==========
+// ========== QUEUE SYSTEM FOR IMPORT ONLY ==========
 let importQueue = [];
-let exportQueue = [];
 let isImportRunning = false;
-let isExportRunning = false;
 
 // Save queue state to file
 const queuePath = __dirname + "/cache/box_queue.json";
@@ -32,9 +30,7 @@ const queuePath = __dirname + "/cache/box_queue.json";
 function saveQueue() {
     const queueData = {
         importQueue,
-        exportQueue,
-        isImportRunning,
-        isExportRunning
+        isImportRunning
     };
     fs.writeFileSync(queuePath, JSON.stringify(queueData, null, 2));
 }
@@ -44,16 +40,14 @@ function loadQueue() {
         try {
             const data = JSON.parse(fs.readFileSync(queuePath, "utf8"));
             importQueue = data.importQueue || [];
-            exportQueue = data.exportQueue || [];
             isImportRunning = data.isImportRunning || false;
-            isExportRunning = data.isExportRunning || false;
         } catch(e) {}
     }
 }
 
 loadQueue();
 
-// ========== AUTO IMPORT PROCESSOR ==========
+// ========== AUTO IMPORT PROCESSOR (RANDOM BATCH + RANDOM DELAY) ==========
 async function processImportQueue(api) {
     if (importQueue.length === 0) {
         isImportRunning = false;
@@ -69,67 +63,115 @@ async function processImportQueue(api) {
         const task = importQueue[0];
         
         try {
-            const { filepath, filename, targetThreadID, authorID, members, currentIndex, addedCount, failedCount, startTime, requestThreadID } = task;
+            const { filename, targetThreadID, members, currentIndex, addedCount, failedCount, startTime, requestThreadID } = task;
             
-            // Initialize task if first time
             if (!task.currentIndex) {
                 task.currentIndex = 0;
                 task.addedCount = 0;
                 task.failedCount = 0;
                 task.startTime = Date.now();
                 
-                // Send start notification ONLY to the thread where command was issued
-                if (requestThreadID) {
-                    api.sendMessage(`🔄 Started background import from "${filename}"\n📊 Total: ${members.length} members\n⏱️ Will add 1 member every 10 seconds`, requestThreadID);
+                // Get existing group members once
+                try {
+                    const threadInfo = await api.getThreadInfo(targetThreadID);
+                    task.existingMembers = new Set(threadInfo.participantIDs || []);
+                    
+                    // Filter out users already in group
+                    const newMembers = [];
+                    for (const uid of members) {
+                        if (!task.existingMembers.has(uid)) {
+                            newMembers.push(uid);
+                        }
+                    }
+                    
+                    task.members = newMembers;
+                    task.totalToAdd = newMembers.length;
+                    task.skippedCount = members.length - newMembers.length;
+                    
+                    if (requestThreadID) {
+                        let msg = `🔄 Started background import from "${filename}"\n`;
+                        msg += `📊 Total in file: ${members.length} members\n`;
+                        msg += `👥 Already in group: ${task.skippedCount} members (skipped)\n`;
+                        msg += `✅ Need to add: ${task.totalToAdd} members\n`;
+                        msg += `⚡ Random batch mode: 2-7 members every 20-70 seconds`;
+                        api.sendMessage(msg, requestThreadID);
+                    }
+                    
+                    if (task.totalToAdd === 0) {
+                        if (requestThreadID) {
+                            api.sendMessage(`✅ No new members to add! All ${members.length} members are already in the group.`, requestThreadID);
+                        }
+                        importQueue.shift();
+                        saveQueue();
+                        continue;
+                    }
+                    
+                } catch (error) {
+                    if (requestThreadID) {
+                        api.sendMessage(`⚠️ Could not fetch group members. Will try to add all (may have duplicates).`, requestThreadID);
+                    }
+                    task.members = members;
+                    task.totalToAdd = members.length;
+                    task.skippedCount = 0;
                 }
             }
             
-            // Process one member
-            if (task.currentIndex < members.length) {
-                const uid = members[task.currentIndex];
+            // Process random batch (2-7 members)
+            if (task.currentIndex < task.members.length) {
+                // Random batch size between 2 and 7
+                const batchSize = Math.floor(Math.random() * 6) + 2; // 2,3,4,5,6,7
+                const endIndex = Math.min(task.currentIndex + batchSize, task.members.length);
+                const batchMembers = task.members.slice(task.currentIndex, endIndex);
                 
-                // Check if already in group
-                const threadInfo = await api.getThreadInfo(targetThreadID);
-                if (!threadInfo.participantIDs.includes(uid)) {
+                let batchAdded = 0;
+                let batchFailed = 0;
+                
+                // Add all members in this batch
+                for (const uid of batchMembers) {
                     try {
                         await api.addUserToGroup(uid, targetThreadID);
-                        task.addedCount++;
+                        batchAdded++;
                     } catch(e) {
-                        task.failedCount++;
+                        batchFailed++;
                     }
-                } else {
-                    task.addedCount++;
                 }
                 
-                task.currentIndex++;
-                
+                task.addedCount += batchAdded;
+                task.failedCount += batchFailed;
+                task.currentIndex = endIndex;
                 importQueue[0] = task;
                 saveQueue();
                 
-                // Send progress update ONLY to request thread, every 50 members
-                if (task.currentIndex % 50 === 0 || task.currentIndex === members.length) {
-                    if (requestThreadID) {
-                        const percent = Math.floor((task.currentIndex / members.length) * 100);
-                        api.sendMessage(`📊 Import progress: ${task.currentIndex}/${members.length} (${percent}%)\n✅ Added: ${task.addedCount}\n❌ Failed: ${task.failedCount}`, requestThreadID);
-                    }
+                // Send progress update after each batch
+                if (requestThreadID) {
+                    const percent = Math.floor((task.currentIndex / task.members.length) * 100);
+                    api.sendMessage(
+                        `📊 Import progress: ${task.currentIndex}/${task.members.length} (${percent}%)\n` +
+                        `📦 Batch: +${batchAdded} members\n` +
+                        `✅ Total added: ${task.addedCount}\n` +
+                        `❌ Failed: ${task.failedCount}`,
+                        requestThreadID
+                    );
                 }
                 
-                await new Promise(resolve => setTimeout(resolve, 10000));
+                // Random delay between 20 and 70 seconds (20000 - 70000 ms)
+                const randomDelay = Math.floor(Math.random() * 50000) + 20000;
+                await new Promise(resolve => setTimeout(resolve, randomDelay));
             }
             
             // Task complete
-            if (task.currentIndex >= members.length) {
+            if (task.currentIndex >= task.members.length) {
                 const elapsed = Math.floor((Date.now() - task.startTime) / 1000);
                 const minutes = Math.floor(elapsed / 60);
                 const seconds = elapsed % 60;
                 
-                // Send completion message ONLY to request thread
                 if (requestThreadID) {
                     api.sendMessage(
                         `✅ IMPORT COMPLETED!\n\n` +
                         `📛 File: ${filename}\n` +
-                        `📊 Total: ${members.length} members\n` +
-                        `✅ Added: ${task.addedCount}\n` +
+                        `📊 Total in file: ${members.length} members\n` +
+                        `👥 Already in group: ${task.skippedCount || 0} (skipped)\n` +
+                        `✅ Newly added: ${task.addedCount}\n` +
                         `❌ Failed: ${task.failedCount}\n` +
                         `⏱️ Time taken: ${minutes}m ${seconds}s`,
                         requestThreadID
@@ -143,7 +185,7 @@ async function processImportQueue(api) {
         } catch (error) {
             console.log("Import error:", error);
             if (task.requestThreadID) {
-                api.sendMessage(`❌ Import failed for "${task.filename}": ${error.message}`, task.requestThreadID);
+                api.sendMessage(`❌ Import failed: ${error.message}`, task.requestThreadID);
             }
             importQueue.shift();
             saveQueue();
@@ -151,144 +193,6 @@ async function processImportQueue(api) {
     }
     
     isImportRunning = false;
-    saveQueue();
-}
-
-// ========== AUTO EXPORT PROCESSOR ==========
-async function processExportQueue(api) {
-    if (exportQueue.length === 0) {
-        isExportRunning = false;
-        saveQueue();
-        return;
-    }
-    
-    if (isExportRunning) return;
-    isExportRunning = true;
-    saveQueue();
-    
-    while (exportQueue.length > 0) {
-        const task = exportQueue[0];
-        
-        try {
-            const { groupId, groupName, authorID, threadID, totalMembers, currentIndex, membersData, existingMemberIds, startTime, requestThreadID } = task;
-            
-            if (!task.currentIndex) {
-                task.currentIndex = 0;
-                task.membersData = [];
-                task.existingMemberIds = new Set();
-                task.startTime = Date.now();
-                
-                const existing = getFilePathByGroupId(groupId);
-                if (existing) {
-                    for (const m of existing.data.members) {
-                        task.existingMemberIds.add(m.id);
-                        task.membersData.push(m);
-                    }
-                }
-                
-                // Send start notification ONLY to request thread
-                if (requestThreadID) {
-                    api.sendMessage(`🔄 Started background export for "${groupName}"\n📊 Total members to process: ${totalMembers}\n⏱️ Will process 1 member every 5 seconds`, requestThreadID);
-                }
-            }
-            
-            const threadInfo = await api.getThreadInfo(groupId);
-            const participants = threadInfo.participantIDs || [];
-            const adminIds = threadInfo.adminIDs ? threadInfo.adminIDs.map(a => a.id) : [];
-            
-            if (task.currentIndex < participants.length) {
-                const uid = participants[task.currentIndex];
-                
-                try {
-                    const userInfo = await api.getUserInfo(uid);
-                    const user = userInfo[uid];
-                    
-                    let gender = "Not specified";
-                    if (user.gender === 1) gender = "Female";
-                    else if (user.gender === 2) gender = "Male";
-                    
-                    const isAdmin = adminIds.includes(uid);
-                    
-                    const memberInfo = {
-                        id: uid,
-                        name: user.name || "Unknown",
-                        username: user.vanity || "No username",
-                        gender: gender,
-                        isAdmin: isAdmin
-                    };
-                    
-                    if (!task.existingMemberIds.has(uid)) {
-                        task.membersData.push(memberInfo);
-                        task.existingMemberIds.add(uid);
-                    } else {
-                        const index = task.membersData.findIndex(m => m.id === uid);
-                        if (index !== -1) {
-                            task.membersData[index] = memberInfo;
-                        }
-                    }
-                } catch(e) {
-                    if (!task.existingMemberIds.has(uid)) {
-                        task.membersData.push({
-                            id: uid,
-                            name: "Unknown",
-                            username: "Unknown",
-                            gender: "Unknown",
-                            isAdmin: false
-                        });
-                        task.existingMemberIds.add(uid);
-                    }
-                }
-                
-                task.currentIndex++;
-                exportQueue[0] = task;
-                saveQueue();
-                
-                // Send progress update ONLY to request thread, every 100 members
-                if (task.currentIndex % 100 === 0 || task.currentIndex === participants.length) {
-                    if (requestThreadID) {
-                        const percent = Math.floor((task.currentIndex / participants.length) * 100);
-                        api.sendMessage(`📊 Export progress: ${task.currentIndex}/${participants.length} (${percent}%)\n📝 Members processed: ${task.membersData.length}`, requestThreadID);
-                    }
-                }
-                
-                await new Promise(resolve => setTimeout(resolve, 5000));
-            }
-            
-            if (task.currentIndex >= participants.length) {
-                const result = await saveOrUpdateExport(groupId, groupName, task.membersData);
-                const elapsed = Math.floor((Date.now() - task.startTime) / 1000);
-                const minutes = Math.floor(elapsed / 60);
-                const seconds = elapsed % 60;
-                
-                // Send completion message ONLY to request thread
-                if (requestThreadID) {
-                    api.sendMessage(
-                        `✅ EXPORT COMPLETED!\n\n` +
-                        `📛 Group: ${groupName}\n` +
-                        `🆔 ID: ${groupId}\n` +
-                        `📦 File: ${result.filename}\n` +
-                        `👥 Total Members: ${task.membersData.length}\n` +
-                        `⏱️ Time taken: ${minutes}m ${seconds}s\n\n` +
-                        `💡 Use /box file list to see all exported files.`,
-                        requestThreadID
-                    );
-                }
-                
-                exportQueue.shift();
-                saveQueue();
-            }
-            
-        } catch (error) {
-            console.log("Export error:", error);
-            if (task.requestThreadID) {
-                api.sendMessage(`❌ Export failed for "${task.groupName}": ${error.message}`, task.requestThreadID);
-            }
-            exportQueue.shift();
-            saveQueue();
-        }
-    }
-    
-    isExportRunning = false;
     saveQueue();
 }
 
@@ -340,11 +244,9 @@ module.exports.handleReply = async function ({ api, event, Threads, handleReply 
     const { threadID, messageID, senderID, body } = event;
     const { author, type, groups, exportData } = handleReply;
     
-    // Silent return if not the author
     if (senderID != author) return;
     
     const isBotAdmin = global.config.ADMINBOT.includes(senderID);
-    const isSuperAdmin = global.config.ADMINBOT.includes(senderID);
     
     let num = null;
     const numberMatch = body.match(/\d+/);
@@ -358,44 +260,23 @@ module.exports.handleReply = async function ({ api, event, Threads, handleReply 
     
     // ========== STOP QUEUE ITEM ==========
     if (isStop && type === "queue_action") {
-        // Only bot admins can stop queue tasks
         if (!isBotAdmin) return;
         
         const parts = body.toLowerCase().split(" ");
-        const taskType = parts[1];
         const taskNum = parseInt(parts[2]);
         
-        if (!taskType || (taskType !== "import" && taskType !== "export")) {
-            return api.sendMessage(`❌ Please specify type!\n\nExamples:\n• stop import 1\n• stop export 1`, threadID, messageID);
+        if (isNaN(taskNum) || taskNum < 1 || taskNum > importQueue.length) {
+            return api.sendMessage(`❌ Import task #${taskNum} not found! Only ${importQueue.length} import task(s) in queue.`, threadID, messageID);
         }
         
-        if (isNaN(taskNum) || taskNum < 1) {
-            return api.sendMessage(`❌ Invalid number!`, threadID, messageID);
-        }
-        
-        if (taskType === "import") {
-            if (taskNum > importQueue.length) {
-                return api.sendMessage(`❌ Import task #${taskNum} not found! Only ${importQueue.length} import task(s) in queue.`, threadID, messageID);
-            }
-            const task = importQueue[taskNum - 1];
-            importQueue.splice(taskNum - 1, 1);
-            saveQueue();
-            return api.sendMessage(`✅ Stopped import: ${task.filename}`, threadID, messageID);
-            
-        } else if (taskType === "export") {
-            if (taskNum > exportQueue.length) {
-                return api.sendMessage(`❌ Export task #${taskNum} not found! Only ${exportQueue.length} export task(s) in queue.`, threadID, messageID);
-            }
-            const task = exportQueue[taskNum - 1];
-            exportQueue.splice(taskNum - 1, 1);
-            saveQueue();
-            return api.sendMessage(`✅ Stopped export: ${task.groupName}`, threadID, messageID);
-        }
+        const task = importQueue[taskNum - 1];
+        importQueue.splice(taskNum - 1, 1);
+        saveQueue();
+        return api.sendMessage(`✅ Stopped import: ${task.filename}`, threadID, messageID);
     }
     
     // ========== DELETE FILE ==========
     if (isDeleteFile && type === "file_list_action") {
-        // Only bot admins can delete files
         if (!isBotAdmin) return;
         
         if (isDeleteAll) {
@@ -431,7 +312,6 @@ module.exports.handleReply = async function ({ api, event, Threads, handleReply 
     
     // ========== EXPORT (ACTIVE LIST REPLY) ==========
     if (type === "active_list_export") {
-        // Only bot admins can export
         if (!isBotAdmin) return;
         
         if (isNaN(num) || num < 1 || num > groups.length) {
@@ -440,39 +320,31 @@ module.exports.handleReply = async function ({ api, event, Threads, handleReply 
         
         const selectedGroup = groups[num - 1];
         
-        const alreadyInQueue = exportQueue.some(q => q.groupId === selectedGroup.id);
-        if (alreadyInQueue) {
-            return api.sendMessage(`⚠️ "${selectedGroup.name}" is already in the export queue!`, threadID, messageID);
-        }
+        api.sendMessage(`⏳ Exporting "${selectedGroup.name}"...\n📊 Fetching all member IDs in one request...`, threadID, messageID);
         
-        const threadInfo = await api.getThreadInfo(selectedGroup.id);
-        const participants = threadInfo.participantIDs || [];
-        
-        exportQueue.push({
-            groupId: selectedGroup.id,
-            groupName: selectedGroup.name,
-            authorID: senderID,
-            threadID: threadID,
-            totalMembers: participants.length,
-            currentIndex: 0,
-            membersData: [],
-            existingMemberIds: new Set(),
-            startTime: null,
-            requestThreadID: threadID
-        });
-        
-        saveQueue();
-        
-        api.sendMessage(
-            `✅ Added "${selectedGroup.name}" to export queue!\n\n` +
-            `📊 Total members: ${participants.length}\n` +
-            `⏱️ Will process 1 member every 5 seconds\n` +
-            `📌 Use /box queue to check status`,
-            threadID, messageID
-        );
-        
-        if (!isExportRunning) {
-            processExportQueue(api);
+        try {
+            const threadInfo = await api.getThreadInfo(selectedGroup.id);
+            const participants = threadInfo.participantIDs || [];
+            
+            const membersData = [];
+            for (const uid of participants) {
+                membersData.push({ id: uid });
+            }
+            
+            const result = await saveOrUpdateExport(selectedGroup.id, selectedGroup.name, membersData);
+            
+            api.sendMessage(
+                `✅ EXPORT COMPLETED!\n\n` +
+                `📛 Group: ${selectedGroup.name}\n` +
+                `🆔 ID: ${selectedGroup.id}\n` +
+                `📦 File: ${result.filename}\n` +
+                `👥 Total Members: ${membersData.length}\n` +
+                `⚡ API Calls: Only 1 (safe!)\n\n` +
+                `💡 Use /box file list to see all exported files.`,
+                threadID, messageID
+            );
+        } catch (error) {
+            api.sendMessage(`❌ Export failed: ${error.message}`, threadID, messageID);
         }
         return;
     }
@@ -480,12 +352,11 @@ module.exports.handleReply = async function ({ api, event, Threads, handleReply 
     // ========== FILE LIST ACTIONS ==========
     else if (type === "file_list_action") {
         const isShowId = body.toLowerCase().includes("show id") || body.toLowerCase().includes("showid");
-        const isShowInfo = body.toLowerCase().includes("show info") || body.toLowerCase().includes("showinfo");
         const isCreate = body.toLowerCase().includes("create");
         const isImport = body.toLowerCase().includes("import");
         
-        // Show ID and Show Info - anyone can view (no permission check)
-        if (isShowId || isShowInfo) {
+        // Show ID - anyone can view
+        if (isShowId) {
             if (isNaN(num) || num < 1 || num > exportData.files.length) {
                 return api.sendMessage(`❌ Invalid number!`, threadID, messageID);
             }
@@ -500,23 +371,12 @@ module.exports.handleReply = async function ({ api, event, Threads, handleReply 
             const fileContent = await fs.readFileSync(filepath, "utf8");
             const data = JSON.parse(fileContent);
             
-            if (isShowId) {
-                let idList = "";
-                for (let i = 0; i < data.members.length; i++) {
-                    idList += data.members[i].id + " ";
-                }
-                const msg = `📋 MEMBERS ID LIST\n━━━━━━━━━━━━━━━━━━━━\n📛 ${data.groupName}\n👥 Total: ${data.totalMembers}\n━━━━━━━━━━━━━━━━━━━━\n\n${idList.trim()}`;
-                return api.sendMessage(msg, threadID, messageID);
+            let idList = "";
+            for (let i = 0; i < data.members.length; i++) {
+                idList += data.members[i].id + " ";
             }
-            
-            if (isShowInfo) {
-                let msg = `📋 MEMBERS FULL INFO\n━━━━━━━━━━━━━━━━━━━━\n📛 ${data.groupName}\n👥 Total: ${data.totalMembers}\n━━━━━━━━━━━━━━━━━━━━\n\n`;
-                for (let i = 0; i < data.members.length; i++) {
-                    const m = data.members[i];
-                    msg += `👤 ${i+1}. ${m.name}\n   🆔 ${m.id}\n   📛 @${m.username}\n   ⚧ ${m.gender}\n   ───────────────────\n`;
-                }
-                return api.sendMessage(msg, threadID, messageID);
-            }
+            const msg = `📋 MEMBERS ID LIST\n━━━━━━━━━━━━━━━━━━━━\n📛 ${data.groupName}\n👥 Total: ${data.totalMembers}\n━━━━━━━━━━━━━━━━━━━━\n\n${idList.trim()}`;
+            return api.sendMessage(msg, threadID, messageID);
         }
         
         // Create, Import, Delete - require bot admin permission
@@ -636,7 +496,7 @@ module.exports.handleReply = async function ({ api, event, Threads, handleReply 
                 api.sendMessage(
                     `✅ Added "${selectedFile}" to import queue for ${targetGroupName}!\n\n` +
                     `📊 Members to add: ${membersToAdd.length}\n` +
-                    `⏱️ Will add 1 member every 10 seconds\n` +
+                    `⚡ Random batch mode: 2-7 members every 20-70 seconds\n` +
                     `📌 Use /box queue to check status`,
                     threadID, messageID
                 );
@@ -655,14 +515,13 @@ module.exports.run = async function ({ api, event, args, Threads }) {
     
     const isBotAdmin = global.config.ADMINBOT.includes(senderID);
     
-    // All commands here require bot admin permission - silent fail for non-admins
     if (!isBotAdmin) return;
     
     // ========== QUEUE STATUS ==========
     if (args[0] === "queue") {
         let msg = `📋 QUEUE STATUS\n━━━━━━━━━━━━━━━━━━━━\n`;
         
-        if (importQueue.length === 0 && exportQueue.length === 0) {
+        if (importQueue.length === 0) {
             msg += `\n✅ No tasks in queue.`;
         }
         
@@ -676,30 +535,14 @@ module.exports.run = async function ({ api, event, args, Threads }) {
                 msg += `      ✅ Added: ${task.addedCount || 0}\n`;
                 msg += `      ❌ Failed: ${task.failedCount || 0}\n`;
                 if (task.currentIndex && task.currentIndex < task.members.length) {
-                    msg += `      ⏱️ Status: Running\n`;
+                    msg += `      ⏱️ Status: Running (random batch mode)\n`;
                 } else {
                     msg += `      ⏱️ Status: Waiting\n`;
                 }
             }
         }
         
-        if (exportQueue.length > 0) {
-            msg += `\n📤 EXPORT QUEUE (${exportQueue.length}):\n`;
-            for (let i = 0; i < exportQueue.length; i++) {
-                const task = exportQueue[i];
-                const percent = task.currentIndex ? Math.floor((task.currentIndex / task.totalMembers) * 100) : 0;
-                msg += `   ${i+1}. 📛 ${task.groupName}\n`;
-                msg += `      📊 Progress: ${task.currentIndex || 0}/${task.totalMembers} (${percent}%)\n`;
-                msg += `      📝 Members: ${task.membersData?.length || 0}\n`;
-                if (task.currentIndex && task.currentIndex < task.totalMembers) {
-                    msg += `      ⏱️ Status: Running\n`;
-                } else {
-                    msg += `      ⏱️ Status: Waiting\n`;
-                }
-            }
-        }
-        
-        msg += `\n━━━━━━━━━━━━━━━━━━━━\n💡 Reply with:\n   stop import [number]\n   stop export [number]`;
+        msg += `\n━━━━━━━━━━━━━━━━━━━━\n💡 Reply with: stop import [number]`;
         
         api.sendMessage(msg, threadID, (error, info) => {
             if (!error) {
@@ -723,12 +566,11 @@ module.exports.run = async function ({ api, event, args, Threads }) {
             
             for (const thread of data) {
                 if (thread.isGroup == true && thread.isSubscribed == true) {
-                    let fullInfo = null;
                     let memberCount = 0;
                     let male = 0, female = 0, unknown = 0;
                     
                     try {
-                        fullInfo = await api.getThreadInfo(thread.threadID);
+                        const fullInfo = await api.getThreadInfo(thread.threadID);
                         memberCount = fullInfo.participantIDs ? fullInfo.participantIDs.length : 0;
                         if (fullInfo.userInfo) {
                             for (let user of fullInfo.userInfo) {
@@ -778,7 +620,7 @@ module.exports.run = async function ({ api, event, args, Threads }) {
                 msg += `   ───────────────────\n`;
             }
             
-            msg += `\n💡 Reply with a number (e.g., "1") or "export 1" to export/update members of a group`;
+            msg += `\n💡 Reply with a number to export/update members of that group (1 API call only)`;
             
             api.sendMessage(msg, threadID, (error, info) => {
                 if (!error) {
@@ -816,7 +658,7 @@ module.exports.run = async function ({ api, event, args, Threads }) {
                     msg += `${i+1}. 📛 ${data.groupName}\n`;
                     msg += `   🆔 ${data.groupId}\n`;
                     msg += `   📅 ${data.exportedAt}\n`;
-                    msg += `   👥 ${data.totalMembers} members\n`;
+                    msg += `   👥 ${data.totalMembers} members (IDs only)\n`;
                     msg += `   📦 ${files[i]}\n`;
                     msg += `   ───────────────────\n`;
                 } catch(e) {
@@ -825,7 +667,7 @@ module.exports.run = async function ({ api, event, args, Threads }) {
                 }
             }
             
-            msg += `\n💡 Commands:\n   • show id [num] - Show only IDs (one line)\n   • show info [num] - Show full info\n   • create [num] [name] - Create new group\n   • import [num] - Add members to current group\n   • import [num] [groupID] - Add members to specific group\n   • delete [num] - Delete file\n   • delete all - Delete all files\n\n📌 /box queue - Check background tasks`;
+            msg += `\n💡 Commands:\n   • show id [num] - Show all member IDs\n   • create [num] [name] - Create new group\n   • import [num] - Add members to current group\n   • import [num] [groupID] - Add members to specific group\n   • delete [num] - Delete file\n   • delete all - Delete all files\n\n📌 /box queue - Check import progress`;
             
             api.sendMessage(msg, threadID, (error, info) => {
                 if (!error) {
@@ -849,10 +691,10 @@ module.exports.run = async function ({ api, event, args, Threads }) {
     else {
         return api.sendMessage(
             `📖 BOX MANAGEMENT\n━━━━━━━━━━━━━━━━━━━━\n\n` +
-            `📦 /box active list - Show groups\n   Reply number - Export (background)\n\n` +
-            `📁 /box file list - Show files\n   show id/info | create | import | delete\n\n` +
-            `📋 /box queue - Check background tasks\n   stop import/export [num] - Stop a task\n\n` +
-            `⚡ Features:\n   • Background import (1 member/10 sec)\n   • Background export (1 member/5 sec)\n   • Progress reports only go to requester\n   • Resume after bot restart\n\n` +
+            `📦 /box active list - Show groups\n   Reply number - Export (1 API call, safe)\n\n` +
+            `📁 /box file list - Show exported files\n   show id | create | import | delete\n\n` +
+            `📋 /box queue - Check import progress\n   stop import [num] - Stop a task\n\n` +
+            `⚡ Features:\n   • Export: 1 API call for all members (safe)\n   • Import: Random batch mode (2-7 members)\n   • Random delays (20-70 seconds between batches)\n   • Auto-skip existing members\n   • Resume after bot restart\n\n` +
             `👑 Bot Admins only`,
             threadID, messageID
         );
