@@ -3,33 +3,6 @@ const axios = require("axios");
 const logger = require("./utils/log");
 const express = require("express");
 const path = require("path");
-const fs = require("fs");
-
-// ==================== Stop file check ====================
-const stopFile = path.join(__dirname, "stop.txt");
-let isStopping = false;
-
-function checkStopFile() {
-    if (isStopping) return;
-    if (fs.existsSync(stopFile)) {
-        isStopping = true;
-        logger("Stop file detected. Shutting down...", "[ STOP ]");
-        process.exit(0);
-    }
-}
-
-// Check every 3 seconds
-setInterval(checkStopFile, 3000);
-
-// Handle termination signals
-process.on("SIGINT", () => {
-    logger("Received SIGINT. Shutting down...", "[ STOP ]");
-    process.exit(0);
-});
-process.on("SIGTERM", () => {
-    logger("Received SIGTERM. Shutting down...", "[ STOP ]");
-    process.exit(0);
-});
 
 // ==================== Load package.json ====================
 let pkg = {};
@@ -50,16 +23,6 @@ app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "/index.html"));
 });
 
-app.get("/stop", (req, res) => {
-    fs.writeFileSync(stopFile, "stopped");
-    res.send("Bot stopping...");
-});
-
-app.get("/status", (req, res) => {
-    const isRunning = !fs.existsSync(stopFile);
-    res.json({ status: isRunning ? "running" : "stopped" });
-});
-
 app.listen(port, () => {
     logger(`Server is running on port ${port}...`, "[ Starting ]");
 }).on("error", (err) => {
@@ -76,11 +39,6 @@ global.countRestart = global.countRestart || 0;
 function startBot(message) {
     if (message) logger(message, "[ Starting ]");
 
-    // Remove stop file if exists on fresh start
-    if (fs.existsSync(stopFile)) {
-        fs.unlinkSync(stopFile);
-    }
-
     const child = spawn("node", ["--trace-warnings", "--async-stack-traces", "Cyber.js"], {
         cwd: __dirname,
         stdio: "inherit",
@@ -88,12 +46,6 @@ function startBot(message) {
     });
 
     child.on("close", (codeExit) => {
-        // Check if stopped by user (stop.txt exists)
-        if (fs.existsSync(stopFile)) {
-            logger("Bot stopped by user command.", "[ STOPPED ]");
-            return;
-        }
-        
         if (codeExit !== 0 && global.countRestart < 5) {
             global.countRestart += 1;
             logger(`Bot exited with code ${codeExit}. Restarting... (${global.countRestart}/5)`, "[ Restarting ]");
