@@ -2,7 +2,7 @@ const fs = require("fs-extra");
 
 module.exports.config = {
     name: "notify",
-    version: "3.2.0",
+    version: "3.3.0",
     hasPermssion: 0,
     credits: "MQL1 Community",
     description: "Send hidden message to any group as bot (anonymous)",
@@ -175,21 +175,27 @@ module.exports.run = async function ({ api, event, args }) {
     
     let targetGroupID = null;
     let messageText = null;
-    let foundId = false;
     
-    const fullText = body;
-    const idMatch = fullText.match(/\b(id|ID)\s+(\d+)\b/);
+    // Parse command: /notify id 823677066843584 আসসালামু আলাইকুম
+    // Method: Check if "id" exists in args
+    const idIndex = args.findIndex(arg => arg.toLowerCase() === "id");
     
-    if (idMatch) {
-        targetGroupID = idMatch[2];
-        foundId = true;
-        let tempText = fullText.replace(/^\/notify\s*/i, '').replace(/^notify\s*/i, '');
-        tempText = tempText.replace(new RegExp(`(id|ID)\\s+${targetGroupID}\\s*`, 'i'), '');
-        messageText = tempText.trim();
+    if (idIndex !== -1 && args.length > idIndex + 1) {
+        // Found "id" keyword
+        targetGroupID = args[idIndex + 1];
+        
+        // Get message from remaining args
+        const messageArgs = args.slice(idIndex + 2);
+        messageText = messageArgs.join(" ");
     }
     
     // Case 1: User provided group ID directly in command
-    if (foundId && targetGroupID && messageText && messageText.length > 0) {
+    if (targetGroupID && messageText && messageText.length > 0) {
+        // Validate group ID is numeric
+        if (!/^\d+$/.test(targetGroupID)) {
+            return api.sendMessage(`❌ Invalid group ID! Please provide a numeric ID.\nExample: /notify id 123456789 Your message`, threadID, messageID);
+        }
+        
         if (userPermission === 1) {
             const isUserAdmin = await isUserAdminInGroup(api, targetGroupID, senderID);
             if (!isUserAdmin) {
@@ -197,6 +203,7 @@ module.exports.run = async function ({ api, event, args }) {
             }
         }
         
+        // Verify bot is in that group
         const botInGroup = await isBotInGroup(api, targetGroupID);
         if (!botInGroup) {
             return api.sendMessage(`❌ Bot is not in group ${targetGroupID} or group doesn't exist!`, threadID, messageID);
@@ -224,12 +231,13 @@ module.exports.run = async function ({ api, event, args }) {
             }
             return;
         } catch (error) {
-            return api.sendMessage(`❌ Failed to send message.\nError: ${error.message}`, threadID, messageID);
+            console.error("Send error:", error);
+            return api.sendMessage(`❌ Failed to send message.\nError: ${error.message || "Unknown error"}`, threadID, messageID);
         }
     }
     
-    // Case 2: User wants to see group list (no ID provided)
-    if (!foundId) {
+    // Case 2: User wants to see group list (no ID provided or no message)
+    if (!targetGroupID || !messageText) {
         try {
             const threadList = await api.getThreadList(1000, null, ["INBOX"]);
             let allGroups = [];
@@ -323,7 +331,7 @@ module.exports.run = async function ({ api, event, args }) {
     }
     
     // Case 3: User provided ID but no message
-    if (foundId && targetGroupID && (!messageText || messageText.length === 0)) {
+    if (targetGroupID && (!messageText || messageText.length === 0)) {
         return api.sendMessage(`❌ Please provide a message to send!\n\nExample: /notify id ${targetGroupID} Your message here`, threadID, messageID);
     }
 };
