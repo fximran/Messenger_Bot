@@ -306,7 +306,7 @@ module.exports.run = async function ({ api, event, args, Threads }) {
         
       } catch(e) {}
       
-      if (isBotAdmin || userIsAdmin) {
+      if (true) {  // সব গ্রুপ দেখাবে
         allThreads.push({ 
           threadName: thread.name || "Unknown", 
           threadID: thread.threadID, 
