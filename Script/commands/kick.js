@@ -1,6 +1,6 @@
 module.exports.config = {
     name: "kick",
-    version: "2.4.0",
+    version: "2.5.0",
     hasPermssion: 1,
     credits: "MQL1 Community",
     description: "Kick a member from the group by mention, reply, id, or name",
@@ -93,61 +93,86 @@ module.exports.run = async function ({ api, event, Threads, args }) {
         return api.sendMessage(msg.no_bot_admin, threadID, messageID);
     }
     
-    // ========== HELPER FUNCTION: Search users by name ==========
-    async function searchUsersByName(searchName) {
-        const participants = threadInfo.participantIDs;
-        let matchedUsers = [];
+    // ========== BUILD LOCAL USER CACHE (ONE TIME SCAN) ==========
+    // This function scans all members once and returns a map for quick lookup
+    async function buildUserCache(participantIDs, threadInfo) {
+        const userCache = [];
+        const botId = api.getCurrentUserID();
         
-        // Clean the search name (remove @ symbol if present)
-        let cleanSearchName = searchName.toLowerCase();
-        if (cleanSearchName.startsWith("@")) {
-            cleanSearchName = cleanSearchName.substring(1);
-        }
-        
-        for (const uid of participants) {
-            if (uid == api.getCurrentUserID()) continue;
+        for (const uid of participantIDs) {
+            // Skip bot and self
+            if (uid == botId) continue;
             if (uid == senderID) continue;
             
             try {
                 const userInfo = await api.getUserInfo(uid);
-                const userName = userInfo[uid].name || "";
+                const user = userInfo[uid];
+                const userName = user.name || "";
                 const userNickname = threadInfo.nicknames && threadInfo.nicknames[uid] ? threadInfo.nicknames[uid] : "";
+                const isAdmin = threadInfo.adminIDs.some(admin => admin.id == uid);
                 
-                // Check if search term matches name or nickname
-                if (userName.toLowerCase().includes(cleanSearchName) || userNickname.toLowerCase().includes(cleanSearchName)) {
-                    const isAdmin = threadInfo.adminIDs.some(admin => admin.id == uid);
-                    if (!isAdmin) {
-                        matchedUsers.push({
-                            id: uid,
-                            name: userName,
-                            nickname: userNickname,
-                            username: userInfo[uid].vanity || "No username"
-                        });
-                    }
-                }
+                // Skip admins (cannot kick)
+                if (isAdmin) continue;
+                
+                userCache.push({
+                    id: uid,
+                    name: userName,
+                    nickname: userNickname,
+                    username: user.vanity || "",
+                    searchTerms: (userName + " " + userNickname).toLowerCase()
+                });
             } catch(e) {}
+        }
+        
+        return userCache;
+    }
+    
+    // ========== SEARCH IN CACHE (LOCAL, NO API CALLS) ==========
+    function searchInCache(userCache, searchTerm) {
+        const cleanTerm = searchTerm.toLowerCase().replace(/^@/, '').trim();
+        const matchedUsers = [];
+        
+        for (const user of userCache) {
+            if (user.searchTerms.includes(cleanTerm)) {
+                matchedUsers.push({
+                    id: user.id,
+                    name: user.name,
+                    nickname: user.nickname,
+                    username: user.username
+                });
+            }
         }
         
         return matchedUsers;
     }
     
-    // ========== KICK BY MENTION (Extract name from @mention) ==========
+    // ========== BUILD CACHE ONCE (ONE TIME API CALLS FOR ALL MEMBERS) ==========
+    const participants = threadInfo.participantIDs;
+    
+    // Send typing indicator to show processing
+    api.sendMessage("⏳ Searching for user...", threadID, (err, info) => {
+        // Optional: remove after 2 seconds
+        setTimeout(() => {
+            api.unsendMessage(info.messageID).catch(() => {});
+        }, 2000);
+    });
+    
+    // Build cache (this makes ONE API call per member - but only once)
+    const userCache = await buildUserCache(participants, threadInfo);
+    
+    // ========== KICK BY MENTION ==========
     if (Object.keys(mentions).length > 0) {
-        // Get the mentioned name from mentions object
         let mentionName = "";
         const mentionedId = Object.keys(mentions)[0];
         mentionName = mentions[mentionedId];
         
-        // Remove @ symbol if present at the beginning
         if (mentionName.startsWith("@")) {
             mentionName = mentionName.substring(1);
         }
         
-        // Also check the message body for the full name (in case of multiple words)
         const atIndex = body.indexOf("@");
         if (atIndex !== -1) {
             const fullMentionText = body.substring(atIndex + 1).trim();
-            // If full mention text is longer, use that
             if (fullMentionText.length > mentionName.length) {
                 mentionName = fullMentionText;
             }
@@ -157,15 +182,14 @@ module.exports.run = async function ({ api, event, Threads, args }) {
             return api.sendMessage(msg.invalid, threadID, messageID);
         }
         
-        // Search for users with this name
-        const matchedUsers = await searchUsersByName(mentionName);
+        // Search in cache (local, no API calls)
+        const matchedUsers = searchInCache(userCache, mentionName);
         
         if (matchedUsers.length === 0) {
             return api.sendMessage(msg.no_user_found.replace("{name}", mentionName), threadID, messageID);
         }
         
         if (matchedUsers.length === 1) {
-            // Direct kick if only one user found
             const target = matchedUsers[0];
             api.removeUserFromGroup(target.id, threadID, (err) => {
                 if (err) {
@@ -182,7 +206,7 @@ module.exports.run = async function ({ api, event, Threads, args }) {
             const user = matchedUsers[i];
             listMsg += `${i+1}. ${user.name}\n`;
             listMsg += `   🆔 ID: ${user.id}\n`;
-            if (user.username !== "No username") listMsg += `   📛 Username: @${user.username}\n`;
+            if (user.username) listMsg += `   📛 Username: @${user.username}\n`;
             if (user.nickname) listMsg += `   🏷️ Nickname: ${user.nickname}\n`;
             listMsg += `   ───────────────────\n`;
         }
@@ -248,17 +272,18 @@ module.exports.run = async function ({ api, event, Threads, args }) {
         return;
     }
     
-    // ========== KICK BY NAME (SEARCH) ==========
+    // ========== KICK BY NAME (SEARCH USING CACHE) ==========
     if (args[0]) {
         const searchName = args.join(" ");
-        const matchedUsers = await searchUsersByName(searchName);
+        
+        // Search in cache (local, no additional API calls)
+        const matchedUsers = searchInCache(userCache, searchName);
         
         if (matchedUsers.length === 0) {
             return api.sendMessage(msg.no_user_found.replace("{name}", searchName), threadID, messageID);
         }
         
         if (matchedUsers.length === 1) {
-            // Direct kick if only one user found
             const target = matchedUsers[0];
             api.removeUserFromGroup(target.id, threadID, (err) => {
                 if (err) {
@@ -275,7 +300,7 @@ module.exports.run = async function ({ api, event, Threads, args }) {
             const user = matchedUsers[i];
             listMsg += `${i+1}. ${user.name}\n`;
             listMsg += `   🆔 ID: ${user.id}\n`;
-            if (user.username !== "No username") listMsg += `   📛 Username: @${user.username}\n`;
+            if (user.username) listMsg += `   📛 Username: @${user.username}\n`;
             if (user.nickname) listMsg += `   🏷️ Nickname: ${user.nickname}\n`;
             listMsg += `   ───────────────────\n`;
         }
