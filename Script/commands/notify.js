@@ -2,7 +2,7 @@ const fs = require("fs-extra");
 
 module.exports.config = {
     name: "notify",
-    version: "3.1.0",
+    version: "3.2.0",
     hasPermssion: 0,
     credits: "MQL1 Community",
     description: "Send hidden message to any group as bot (anonymous)",
@@ -55,16 +55,15 @@ function truncateMessage(text, maxLength = 50) {
 
 module.exports.handleReply = async function ({ api, event, handleReply }) {
     const { threadID, messageID, senderID, body } = event;
-    const { author, groups, targetGroupID, targetGroupName, type, lastMessageID } = handleReply;
+    const { author, groups, targetGroupID, targetGroupName, type } = handleReply;
     
     if (senderID != author) return;
     
     const userPermission = await getUserPermission(api, threadID, senderID);
     
-    // Permission 0: No access at all
     if (userPermission === 0) return;
     
-    // NEW: If replying to a success message, extract group ID and resend
+    // If replying to a success message, extract group ID and resend
     if (type === "success_reply") {
         const message = body.trim();
         if (!message || message.length === 0) {
@@ -74,14 +73,12 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
         try {
             await api.sendMessage(message, targetGroupID);
             
-            // Send success message with truncated preview
             const truncatedMsg = truncateMessage(message);
             const successMsg = await api.sendMessage(
-                `✅ Message sent successfully to:\n📛 ${targetGroupName}\n🆔 ${targetGroupID}\n\n📝 ${truncatedMsg}${message.length > 50 ? '' : ''}`,
+                `✅ Message sent successfully to:\n📛 ${targetGroupName}\n🆔 ${targetGroupID}\n\n📝 ${truncatedMsg}`,
                 threadID, messageID
             );
             
-            // Store for potential re-reply
             if (successMsg && successMsg.messageID) {
                 global.client.handleReply.push({
                     name: "notify",
@@ -107,7 +104,6 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
         
         const selectedGroup = groups[num - 1];
         
-        // Permission 1: Can only send to groups where user is admin
         if (userPermission === 1) {
             const isUserAdmin = await isUserAdminInGroup(api, selectedGroup.id, senderID);
             if (!isUserAdmin) {
@@ -116,7 +112,7 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
         }
         
         api.sendMessage(`✏️ Selected: ${selectedGroup.name}\n🆔 ${selectedGroup.id}\n\nPlease type your message to send to this group as BOT:`, threadID, (err, info) => {
-            if (!err) {
+            if (!err && info) {
                 global.client.handleReply.push({
                     name: "notify",
                     messageID: info.messageID,
@@ -126,7 +122,7 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
                     targetGroupName: selectedGroup.name
                 });
             }
-        }, messageID);
+        });
         return;
     }
     
@@ -137,7 +133,6 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
             return api.sendMessage("❌ Message cannot be empty!", threadID, messageID);
         }
         
-        // Permission 1: Check if user is admin in target group
         if (userPermission === 1) {
             const isUserAdmin = await isUserAdminInGroup(api, targetGroupID, senderID);
             if (!isUserAdmin) {
@@ -148,14 +143,12 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
         try {
             await api.sendMessage(message, targetGroupID);
             
-            // Send success message with truncated message preview
             const truncatedMsg = truncateMessage(message);
             const successMsg = await api.sendMessage(
-                `✅ Message sent successfully to:\n📛 ${targetGroupName}\n🆔 ${targetGroupID}\n\n📝 ${truncatedMsg}${message.length > 50 ? '' : ''}`,
+                `✅ Message sent successfully to:\n📛 ${targetGroupName}\n🆔 ${targetGroupID}\n\n📝 ${truncatedMsg}`,
                 threadID, messageID
             );
             
-            // Store success message info so user can reply to send another message
             if (successMsg && successMsg.messageID) {
                 global.client.handleReply.push({
                     name: "notify",
@@ -173,35 +166,30 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
     }
 };
 
-module.exports.run = async function ({ api, event, args, Threads }) {
+module.exports.run = async function ({ api, event, args }) {
     const { threadID, messageID, senderID, body } = event;
     
-    // Check user permission in current group
     const userPermission = await getUserPermission(api, threadID, senderID);
     
-    // Permission 0: Silent fail - no response at all
     if (userPermission === 0) return;
     
     let targetGroupID = null;
     let messageText = null;
     let foundId = false;
     
-    // Check if there's an ID in the command
     const fullText = body;
     const idMatch = fullText.match(/\b(id|ID)\s+(\d+)\b/);
     
     if (idMatch) {
         targetGroupID = idMatch[2];
         foundId = true;
-        // Extract message after removing the notify command and the id part
-        let tempText = fullText.replace(/\/notify\s*/i, '').replace(/notify\s*/i, '');
+        let tempText = fullText.replace(/^\/notify\s*/i, '').replace(/^notify\s*/i, '');
         tempText = tempText.replace(new RegExp(`(id|ID)\\s+${targetGroupID}\\s*`, 'i'), '');
         messageText = tempText.trim();
     }
     
     // Case 1: User provided group ID directly in command
     if (foundId && targetGroupID && messageText && messageText.length > 0) {
-        // Permission 1: Check if user is admin in target group
         if (userPermission === 1) {
             const isUserAdmin = await isUserAdminInGroup(api, targetGroupID, senderID);
             if (!isUserAdmin) {
@@ -209,7 +197,6 @@ module.exports.run = async function ({ api, event, args, Threads }) {
             }
         }
         
-        // Verify bot is in that group
         const botInGroup = await isBotInGroup(api, targetGroupID);
         if (!botInGroup) {
             return api.sendMessage(`❌ Bot is not in group ${targetGroupID} or group doesn't exist!`, threadID, messageID);
@@ -219,14 +206,12 @@ module.exports.run = async function ({ api, event, args, Threads }) {
             const threadInfo = await api.getThreadInfo(targetGroupID);
             await api.sendMessage(messageText, targetGroupID);
             
-            // Send success message with truncated preview
             const truncatedMsg = truncateMessage(messageText);
             const successMsg = await api.sendMessage(
-                `✅ Message sent successfully to:\n📛 ${threadInfo.threadName || targetGroupID}\n🆔 ${targetGroupID}\n\n📝 ${truncatedMsg}${messageText.length > 50 ? '' : ''}`,
+                `✅ Message sent successfully to:\n📛 ${threadInfo.threadName || targetGroupID}\n🆔 ${targetGroupID}\n\n📝 ${truncatedMsg}`,
                 threadID, messageID
             );
             
-            // Store for re-reply
             if (successMsg && successMsg.messageID) {
                 global.client.handleReply.push({
                     name: "notify",
@@ -246,7 +231,6 @@ module.exports.run = async function ({ api, event, args, Threads }) {
     // Case 2: User wants to see group list (no ID provided)
     if (!foundId) {
         try {
-            // Get all groups bot is in
             const threadList = await api.getThreadList(1000, null, ["INBOX"]);
             let allGroups = [];
             
@@ -273,7 +257,6 @@ module.exports.run = async function ({ api, event, args, Threads }) {
                 return api.sendMessage("❌ Bot is not in any group!", threadID, messageID);
             }
             
-            // Filter groups based on user permission
             let filteredGroups = [];
             
             if (userPermission === 1) {
@@ -321,16 +304,16 @@ module.exports.run = async function ({ api, event, args, Threads }) {
             msg += `💡 After sending, reply to the success message to send another message to the same group.`;
             
             api.sendMessage(msg, threadID, (error, info) => {
-                if (!error) {
+                if (!error && info) {
                     global.client.handleReply.push({
-                        name: this.config.name,
+                        name: "notify",
                         messageID: info.messageID,
                         author: senderID,
                         type: "group_list",
                         groups: filteredGroups
                     });
                 }
-            }, messageID);
+            });
             
         } catch (error) {
             console.error("Notify error:", error);
