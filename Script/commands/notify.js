@@ -2,7 +2,7 @@ const fs = require("fs-extra");
 
 module.exports.config = {
     name: "notify",
-    version: "3.1.0",
+    version: "3.2.0",
     hasPermssion: 0,
     credits: "MQL1 Community",
     description: "Send hidden message to any group as bot (anonymous)",
@@ -55,16 +55,15 @@ function truncateMessage(text, maxLength = 50) {
 
 module.exports.handleReply = async function ({ api, event, handleReply }) {
     const { threadID, messageID, senderID, body } = event;
-    const { author, groups, targetGroupID, targetGroupName, type, lastMessageID } = handleReply;
+    const { author, groups, targetGroupID, targetGroupName, type } = handleReply;
     
     if (senderID != author) return;
     
     const userPermission = await getUserPermission(api, threadID, senderID);
     
-    // Permission 0: No access at all
     if (userPermission === 0) return;
     
-    // NEW: If replying to a success message, extract group ID and resend
+    // If replying to a success message, extract group ID and resend
     if (type === "success_reply") {
         const message = body.trim();
         if (!message || message.length === 0) {
@@ -74,14 +73,12 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
         try {
             await api.sendMessage(message, targetGroupID);
             
-            // Send success message with truncated preview
             const truncatedMsg = truncateMessage(message);
             const successMsg = await api.sendMessage(
                 `✅ Message sent successfully to:\n📛 ${targetGroupName}\n🆔 ${targetGroupID}\n\n📝 ${truncatedMsg}${message.length > 50 ? '' : ''}`,
                 threadID, messageID
             );
             
-            // Store for potential re-reply
             if (successMsg && successMsg.messageID) {
                 global.client.handleReply.push({
                     name: "notify",
@@ -107,7 +104,8 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
         
         const selectedGroup = groups[num - 1];
         
-        // Permission 1: Can only send to groups where user is admin
+        // Permission 1 (Group Admin): can only send to groups where they are admin
+        // Permission 2 (Bot Admin): can send to any group
         if (userPermission === 1) {
             const isUserAdmin = await isUserAdminInGroup(api, selectedGroup.id, senderID);
             if (!isUserAdmin) {
@@ -137,7 +135,8 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
             return api.sendMessage("❌ Message cannot be empty!", threadID, messageID);
         }
         
-        // Permission 1: Check if user is admin in target group
+        // Permission 1 (Group Admin): check if admin in target group
+        // Permission 2 (Bot Admin): no check needed
         if (userPermission === 1) {
             const isUserAdmin = await isUserAdminInGroup(api, targetGroupID, senderID);
             if (!isUserAdmin) {
@@ -148,14 +147,12 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
         try {
             await api.sendMessage(message, targetGroupID);
             
-            // Send success message with truncated message preview
             const truncatedMsg = truncateMessage(message);
             const successMsg = await api.sendMessage(
                 `✅ Message sent successfully to:\n📛 ${targetGroupName}\n🆔 ${targetGroupID}\n\n📝 ${truncatedMsg}${message.length > 50 ? '' : ''}`,
                 threadID, messageID
             );
             
-            // Store success message info so user can reply to send another message
             if (successMsg && successMsg.messageID) {
                 global.client.handleReply.push({
                     name: "notify",
@@ -176,24 +173,20 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
 module.exports.run = async function ({ api, event, args, Threads }) {
     const { threadID, messageID, senderID, body } = event;
     
-    // Check user permission in current group
     const userPermission = await getUserPermission(api, threadID, senderID);
     
-    // Permission 0: Silent fail - no response at all
     if (userPermission === 0) return;
     
     let targetGroupID = null;
     let messageText = null;
     let foundId = false;
     
-    // Check if there's an ID in the command
     const fullText = body;
     const idMatch = fullText.match(/\b(id|ID)\s+(\d+)\b/);
     
     if (idMatch) {
         targetGroupID = idMatch[2];
         foundId = true;
-        // Extract message after removing the notify command and the id part
         let tempText = fullText.replace(/\/notify\s*/i, '').replace(/notify\s*/i, '');
         tempText = tempText.replace(new RegExp(`(id|ID)\\s+${targetGroupID}\\s*`, 'i'), '');
         messageText = tempText.trim();
@@ -202,6 +195,7 @@ module.exports.run = async function ({ api, event, args, Threads }) {
     // Case 1: User provided group ID directly in command
     if (foundId && targetGroupID && messageText && messageText.length > 0) {
         // Permission 1: Check if user is admin in target group
+        // Permission 2: Skip check
         if (userPermission === 1) {
             const isUserAdmin = await isUserAdminInGroup(api, targetGroupID, senderID);
             if (!isUserAdmin) {
@@ -209,7 +203,6 @@ module.exports.run = async function ({ api, event, args, Threads }) {
             }
         }
         
-        // Verify bot is in that group
         const botInGroup = await isBotInGroup(api, targetGroupID);
         if (!botInGroup) {
             return api.sendMessage(`❌ Bot is not in group ${targetGroupID} or group doesn't exist!`, threadID, messageID);
@@ -219,14 +212,12 @@ module.exports.run = async function ({ api, event, args, Threads }) {
             const threadInfo = await api.getThreadInfo(targetGroupID);
             await api.sendMessage(messageText, targetGroupID);
             
-            // Send success message with truncated preview
             const truncatedMsg = truncateMessage(messageText);
             const successMsg = await api.sendMessage(
                 `✅ Message sent successfully to:\n📛 ${threadInfo.threadName || targetGroupID}\n🆔 ${targetGroupID}\n\n📝 ${truncatedMsg}${messageText.length > 50 ? '' : ''}`,
                 threadID, messageID
             );
             
-            // Store for re-reply
             if (successMsg && successMsg.messageID) {
                 global.client.handleReply.push({
                     name: "notify",
@@ -246,7 +237,6 @@ module.exports.run = async function ({ api, event, args, Threads }) {
     // Case 2: User wants to see group list (no ID provided)
     if (!foundId) {
         try {
-            // Get all groups bot is in
             const threadList = await api.getThreadList(1000, null, ["INBOX"]);
             let allGroups = [];
             
@@ -276,15 +266,17 @@ module.exports.run = async function ({ api, event, args, Threads }) {
             // Filter groups based on user permission
             let filteredGroups = [];
             
-            if (userPermission === 1) {
+            if (userPermission === 2) {
+                // Bot Admin: সব গ্রুপ দেখাবে
+                filteredGroups = allGroups;
+            } else if (userPermission === 1) {
+                // Group Admin: শুধু যেখানে অ্যাডমিন
                 for (const group of allGroups) {
                     const isUserAdmin = await isUserAdminInGroup(api, group.id, senderID);
                     if (isUserAdmin) {
                         filteredGroups.push(group);
                     }
                 }
-            } else {
-                filteredGroups = allGroups;
             }
             
             if (filteredGroups.length === 0) {
@@ -296,7 +288,7 @@ module.exports.run = async function ({ api, event, args, Threads }) {
             
             filteredGroups.sort((a, b) => b.messageCount - a.messageCount);
             
-            let permissionLevelName = userPermission === 2 ? "Super Admin (Full Access)" : "Group Admin (Your Groups Only)";
+            let permissionLevelName = userPermission === 2 ? "🔓 Super Admin (Full Access - All Groups)" : "🔒 Group Admin (Your Groups Only)";
             
             let msg = `📋 GROUP LIST\n━━━━━━━━━━━━━━━━━━━━\n`;
             msg += `👑 ${permissionLevelName}\n`;
@@ -339,7 +331,6 @@ module.exports.run = async function ({ api, event, args, Threads }) {
         return;
     }
     
-    // Case 3: User provided ID but no message
     if (foundId && targetGroupID && (!messageText || messageText.length === 0)) {
         return api.sendMessage(`❌ Please provide a message to send!\n\nExample: /notify id ${targetGroupID} Your message here`, threadID, messageID);
     }
