@@ -2,7 +2,7 @@ const fs = require("fs-extra");
 
 module.exports.config = {
     name: "notify",
-    version: "3.0.0",
+    version: "3.1.0",
     hasPermssion: 0,
     credits: "MQL1 Community",
     description: "Send hidden message to any group as bot (anonymous)",
@@ -46,9 +46,16 @@ async function isUserAdminInGroup(api, groupID, userID) {
     }
 }
 
+// Helper function to truncate message for display
+function truncateMessage(text, maxLength = 50) {
+    if (!text) return "";
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + "...";
+}
+
 module.exports.handleReply = async function ({ api, event, handleReply }) {
     const { threadID, messageID, senderID, body } = event;
-    const { author, groups, targetGroupID, targetGroupName, type } = handleReply;
+    const { author, groups, targetGroupID, targetGroupName, type, lastMessageID } = handleReply;
     
     if (senderID != author) return;
     
@@ -56,6 +63,40 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
     
     // Permission 0: No access at all
     if (userPermission === 0) return;
+    
+    // NEW: If replying to a success message, extract group ID and resend
+    if (type === "success_reply") {
+        const message = body.trim();
+        if (!message || message.length === 0) {
+            return api.sendMessage("❌ Message cannot be empty!", threadID, messageID);
+        }
+        
+        try {
+            await api.sendMessage(message, targetGroupID);
+            
+            // Send success message with truncated preview
+            const truncatedMsg = truncateMessage(message);
+            const successMsg = await api.sendMessage(
+                `✅ Message sent successfully to:\n📛 ${targetGroupName}\n🆔 ${targetGroupID}\n\n📝 ${truncatedMsg}${message.length > 50 ? '' : ''}`,
+                threadID, messageID
+            );
+            
+            // Store for potential re-reply
+            if (successMsg && successMsg.messageID) {
+                global.client.handleReply.push({
+                    name: "notify",
+                    messageID: successMsg.messageID,
+                    author: senderID,
+                    type: "success_reply",
+                    targetGroupID: targetGroupID,
+                    targetGroupName: targetGroupName
+                });
+            }
+            return;
+        } catch (error) {
+            return api.sendMessage(`❌ Failed to send message.\nError: ${error.message}`, threadID, messageID);
+        }
+    }
     
     // For group list reply - ask for message
     if (type === "group_list") {
@@ -106,7 +147,26 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
         
         try {
             await api.sendMessage(message, targetGroupID);
-            return api.sendMessage(`✅ Message sent successfully to:\n📛 ${targetGroupName}\n🆔 ${targetGroupID}\n\n📝 ${message.substring(0, 200)}${message.length > 200 ? '...' : ''}`, threadID, messageID);
+            
+            // Send success message with truncated message preview
+            const truncatedMsg = truncateMessage(message);
+            const successMsg = await api.sendMessage(
+                `✅ Message sent successfully to:\n📛 ${targetGroupName}\n🆔 ${targetGroupID}\n\n📝 ${truncatedMsg}${message.length > 50 ? '' : ''}`,
+                threadID, messageID
+            );
+            
+            // Store success message info so user can reply to send another message
+            if (successMsg && successMsg.messageID) {
+                global.client.handleReply.push({
+                    name: "notify",
+                    messageID: successMsg.messageID,
+                    author: senderID,
+                    type: "success_reply",
+                    targetGroupID: targetGroupID,
+                    targetGroupName: targetGroupName
+                });
+            }
+            return;
         } catch (error) {
             return api.sendMessage(`❌ Failed to send message.\nError: ${error.message}`, threadID, messageID);
         }
@@ -158,7 +218,26 @@ module.exports.run = async function ({ api, event, args, Threads }) {
         try {
             const threadInfo = await api.getThreadInfo(targetGroupID);
             await api.sendMessage(messageText, targetGroupID);
-            return api.sendMessage(`✅ Message sent successfully to:\n📛 ${threadInfo.threadName || targetGroupID}\n🆔 ${targetGroupID}\n\n📝 Message: ${messageText.substring(0, 100)}${messageText.length > 100 ? '...' : ''}`, threadID, messageID);
+            
+            // Send success message with truncated preview
+            const truncatedMsg = truncateMessage(messageText);
+            const successMsg = await api.sendMessage(
+                `✅ Message sent successfully to:\n📛 ${threadInfo.threadName || targetGroupID}\n🆔 ${targetGroupID}\n\n📝 ${truncatedMsg}${messageText.length > 50 ? '' : ''}`,
+                threadID, messageID
+            );
+            
+            // Store for re-reply
+            if (successMsg && successMsg.messageID) {
+                global.client.handleReply.push({
+                    name: "notify",
+                    messageID: successMsg.messageID,
+                    author: senderID,
+                    type: "success_reply",
+                    targetGroupID: targetGroupID,
+                    targetGroupName: threadInfo.threadName || targetGroupID
+                });
+            }
+            return;
         } catch (error) {
             return api.sendMessage(`❌ Failed to send message.\nError: ${error.message}`, threadID, messageID);
         }
@@ -198,7 +277,6 @@ module.exports.run = async function ({ api, event, args, Threads }) {
             let filteredGroups = [];
             
             if (userPermission === 1) {
-                // Permission 1: Only show groups where user is admin
                 for (const group of allGroups) {
                     const isUserAdmin = await isUserAdminInGroup(api, group.id, senderID);
                     if (isUserAdmin) {
@@ -206,7 +284,6 @@ module.exports.run = async function ({ api, event, args, Threads }) {
                     }
                 }
             } else {
-                // Permission 2: Show all groups
                 filteredGroups = allGroups;
             }
             
@@ -217,11 +294,12 @@ module.exports.run = async function ({ api, event, args, Threads }) {
                 return api.sendMessage("❌ No groups available!", threadID, messageID);
             }
             
-            // Sort by message count (most active first)
             filteredGroups.sort((a, b) => b.messageCount - a.messageCount);
             
+            let permissionLevelName = userPermission === 2 ? "Super Admin (Full Access)" : "Group Admin (Your Groups Only)";
+            
             let msg = `📋 GROUP LIST\n━━━━━━━━━━━━━━━━━━━━\n`;
-            msg += `👑 Your Permission Level: ${userPermission === 2 ? 'Super Admin (Full Access)' : 'Group Admin (Your Groups Only)'}\n`;
+            msg += `👑 ${permissionLevelName}\n`;
             msg += `📊 Total: ${filteredGroups.length} groups\n`;
             msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
             
@@ -239,7 +317,8 @@ module.exports.run = async function ({ api, event, args, Threads }) {
             } else {
                 msg += `💡 Or use: /notify id [groupID] [message] - Direct send (only groups you admin)\n`;
             }
-            msg += `💡 Example: /notify id 123456789 Hello everyone!`;
+            msg += `💡 Example: /notify id 123456789 Hello everyone!\n`;
+            msg += `💡 After sending, reply to the success message to send another message to the same group.`;
             
             api.sendMessage(msg, threadID, (error, info) => {
                 if (!error) {
