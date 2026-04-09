@@ -3,7 +3,7 @@ const moment = require("moment-timezone");
 
 module.exports.config = {
   name: 'allgroup',
-  version: '4.4.0',
+  version: '4.5.0',
   credits: "MQL1 Community",
   hasPermssion: 1,
   description: 'List groups - Bot Admins see all, Group Admins see only their groups',
@@ -32,7 +32,6 @@ module.exports.handleReply = async function ({ api, event, args, Threads, handle
   var idgr = handleReply.groupid[num - 1];
   var groupName = handleReply.groupName[num - 1];
   
-  // BOT ADMIN ONLY COMMANDS
   if (cmd === "join" || cmd === "promote") {
     if (!isBotAdmin) {
       return api.sendMessage("❌ This command is only for Bot Admins!", threadID, messageID);
@@ -209,7 +208,6 @@ module.exports.handleReply = async function ({ api, event, args, Threads, handle
 module.exports.run = async function ({ api, event, args, Threads }) {
   const { threadID, messageID, senderID } = event;
   
-  // Check permissions
   const threadInfo = await api.getThreadInfo(threadID);
   const isGroupAdmin = threadInfo.adminIDs.some(item => item.id == senderID);
   const isBotAdmin = global.config.ADMINBOT.includes(senderID);
@@ -218,16 +216,13 @@ module.exports.run = async function ({ api, event, args, Threads }) {
     return api.sendMessage("❌ Only Group Admins or Bot Admins can use this command!", threadID, messageID);
   }
   
-  // Helper function
   function getStatusText(value) {
     if (value === true) return "✅ ON";
     return "❌ OFF";
   }
   
-  // Language names
   const langNames = { en: "English", bn: "বাংলা", hi: "हिंदी" };
   
-  // BOT INFO
   const botID = api.getCurrentUserID();
   const botInfo = await api.getUserInfo(botID);
   const originalName = botInfo[botID].name || "Bot";
@@ -258,8 +253,9 @@ module.exports.run = async function ({ api, event, args, Threads }) {
 
 `;
   
-  // GET ALL THREADS
   var allThreads = [];
+  var failedGroups = [];
+  
   try {
     var data = await api.getThreadList(500, null, ["INBOX"]);
   } catch (e) {
@@ -304,33 +300,42 @@ module.exports.run = async function ({ api, event, args, Threads }) {
         const grpLang = threadData.language || global.config.language || "en";
         groupLanguage = langNames[grpLang] || grpLang;
         
-      } catch(e) {}
-      
-      if (true) {  // সব গ্রুপ দেখাবে
-        allThreads.push({ 
-          threadName: thread.name || "Unknown", 
-          threadID: thread.threadID, 
-          messageCount: messageCount,
-          memberCount: memberCount,
-          adminCount: adminCountInGroup,
-          approvalMode: approvalMode,
-          userIsAdmin: userIsAdmin,
-          emoji: groupEmoji,
-          language: groupLanguage,
-          antiOut: antiOutStatus,
-          male: male,
-          female: female,
-          unknown: unknown
-        });
+        // Bot Admin সব গ্রুপ দেখতে পারে, অন্যথায় শুধু যেখানে user admin
+        if (isBotAdmin || userIsAdmin) {
+          allThreads.push({ 
+            threadName: thread.name || "Unknown", 
+            threadID: thread.threadID, 
+            messageCount: messageCount,
+            memberCount: memberCount,
+            adminCount: adminCountInGroup,
+            approvalMode: approvalMode,
+            userIsAdmin: userIsAdmin,
+            emoji: groupEmoji,
+            language: groupLanguage,
+            antiOut: antiOutStatus,
+            male: male,
+            female: female,
+            unknown: unknown
+          });
+        }
+        
+      } catch(e) {
+        // গ্রুপের তথ্য নিতে ব্যর্থ হয়েছে - লগ করুন
+        console.log(`Failed to get info for group: ${thread.name} (${thread.threadID})`, e.message);
+        failedGroups.push(thread.name || thread.threadID);
       }
     }
+  }
+  
+  // যদি কিছু গ্রুপ ফেইল করে থাকে, তা রিপোর্ট করুন
+  if (failedGroups.length > 0 && isBotAdmin) {
+    console.log(`Failed to load ${failedGroups.length} groups:`, failedGroups);
   }
   
   allThreads.sort((a, b) => b.messageCount - a.messageCount);
   
   const totalGroups = allThreads.length;
   
-  // SHOW ALL GROUPS
   if (args[0] && args[0].toLowerCase() === "all") {
     var groupid = [];
     var groupName = [];
@@ -348,6 +353,9 @@ module.exports.run = async function ({ api, event, args, Threads }) {
     
     msg += "┌─────────────────── 📊 STATISTICS ───────────────────┐\n";
     msg += `│   📦 Total Groups  : ${totalGroups}                                              │\n`;
+    if (failedGroups.length > 0 && isBotAdmin) {
+      msg += `│   ⚠️ Failed to load : ${failedGroups.length} groups (check console)              │\n`;
+    }
     msg += "└─────────────────────────────────────────────────────┘\n\n";
     
     for (let i = 0; i < allThreads.length; i++) {
@@ -410,7 +418,6 @@ module.exports.run = async function ({ api, event, args, Threads }) {
     });
     
   } else {
-    // PAGE VIEW
     var groupid = [];
     var groupName = [];
     var page = parseInt(args[0]) || 1;
@@ -433,6 +440,9 @@ module.exports.run = async function ({ api, event, args, Threads }) {
     
     msg += "===== 📊 STATISTICS =====\n";
     msg += `📦 Total: ${totalGroups}\n`;
+    if (failedGroups.length > 0 && isBotAdmin) {
+      msg += `⚠️ Failed: ${failedGroups.length} groups (check console)\n`;
+    }
     msg += `====================\n\n`;
     
     for (let i = (page - 1) * limit; i < page * limit && i < allThreads.length; i++) {
