@@ -137,7 +137,6 @@ function getPM2Status(callback) {
     });
 }
 
-// Helper to read config
 function readConfig() {
     const configPath = path.join(__dirname, "config.json");
     try {
@@ -261,18 +260,20 @@ app.get('/api/bot-logs', requireAuth, requirePermission(2), (req, res) => {
     });
 });
 
-// ----- Bot Status -----
+// ----- Bot Status (Reads fresh config every time) -----
 app.get('/api/status', requireAuth, (req, res) => {
     getPM2Status((pm2Status) => {
         const config = readConfig();
         let botId = null;
         if (Array.isArray(config.NDH) && config.NDH.length > 0) botId = config.NDH[0];
+        // Explicitly read DEBUG_MODE from config; if missing, default to false
+        const debugMode = typeof config.DEBUG_MODE === 'boolean' ? config.DEBUG_MODE : false;
         res.json({
             botName: config.BOTNAME || "Unnamed Bot",
             botId: botId || 'N/A',
             botPrefix: config.PREFIX || "/",
             botLanguage: config.language || 'en',
-            debugMode: config.DEBUG_MODE || false,
+            debugMode: debugMode,
             version: BOT_VERSION,
             online: pm2Status.online,
             status: pm2Status.status,
@@ -307,7 +308,7 @@ app.post('/api/restart', requireAuth, (req, res) => {
     });
 });
 
-// ----- Config API (Read/Write full config) -----
+// ----- Config API -----
 app.get('/api/config', requireAuth, requirePermission(2), (req, res) => {
     const configPath = path.join(__dirname, "config.json");
     try {
@@ -322,9 +323,9 @@ app.post('/api/config', requireAuth, requirePermission(2), (req, res) => {
         const newConfig = req.body;
         fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2), "utf8");
 
-        // Sync global language if used by bot
+        // Sync global language and debug mode for bot process
         if (!global.config) global.config = {};
-        if (newConfig.language) global.config.language = newConfig.language;
+        if (typeof newConfig.language !== 'undefined') global.config.language = newConfig.language;
         if (typeof newConfig.DEBUG_MODE !== 'undefined') global.debugMode = newConfig.DEBUG_MODE;
 
         logActivity(req.session.user.id, req.session.user.name, 'CONFIG_EDIT', 'Updated config.json', req);
