@@ -5,58 +5,19 @@ module.exports.config = {
     version: "4.1.0",
     hasPermssion: 2,
     credits: "MQL1 Community",
-    description: "View bot info, reload config, logout, change language, toggle debug, set bot nickname",
+    description: "View bot info, change language, toggle debug mode",
     commandCategory: "system",
-    usages: "bot | bot load | bot logout | bot language [en/bn/hi] | bot debug [on/off] | bot setmyname [name]",
+    usages: "bot | bot language [en/bn/hi] | bot debug [on/off/status]",
     cooldowns: 5
 };
 
-module.exports.run = async function({ api, event, args, Threads }) {
+module.exports.run = async function({ api, event, args }) {
     const { threadID, messageID, senderID } = event;
     const isBotAdmin = global.config.ADMINBOT.includes(senderID);
     
-    if (!isBotAdmin && args[0] !== "bot") {
+    // Only bot admins can use this command
+    if (!isBotAdmin) {
         return api.sendMessage("❌ Only bot admins can use this command!", threadID, messageID);
-    }
-    
-    // ========== SET BOT NAME (setmyname) ==========
-    if (args[0] === "setmyname") {
-        let newBotName = args.slice(1).join(" ");
-        
-        // যদি কোনো নাম না দেয়
-        if (!newBotName) {
-            return api.sendMessage(
-                `📝 SET BOT NAME\n━━━━━━━━━━━━━━━━━━━━\n\n` +
-                `📌 Usage:\n` +
-                `   • /bot setmyname [নাম] - কনফিগ ফাইলে বটের নাম সেট করবে\n` +
-                `   • /bot setmyname - বর্তমান নাম দেখাবে\n\n` +
-                `💡 Example: /bot setmyname My Awesome Bot`,
-                threadID, messageID
-            );
-        }
-        
-        // পুরনো নাম সেভ করে রাখি
-        const oldName = global.config.BOTNAME || "Bot";
-        
-        // কনফিগ আপডেট
-        global.config.BOTNAME = newBotName;
-        await fs.writeFileSync(global.client.configPath, JSON.stringify(global.config, null, 4));
-        
-        // বর্তমান গ্রুপে বটের নাম পরিবর্তন
-        try {
-            await api.changeNickname(newBotName, threadID, api.getCurrentUserID());
-        } catch(e) {
-            console.log("Nickname change error in current group:", e);
-        }
-        
-        return api.sendMessage(
-            `✅ BOT NAME UPDATED!\n━━━━━━━━━━━━━━━━━━━━\n\n` +
-            `📛 Old Name: ${oldName}\n` +
-            `🆕 New Name: ${newBotName}\n\n` +
-            `💡 The name has been saved to config.json and applied to this group.\n` +
-            `📌 When added to new groups, the bot will use this name.`,
-            threadID, messageID
-        );
     }
     
     // ========== CHANGE BOT LANGUAGE ==========
@@ -152,25 +113,6 @@ module.exports.run = async function({ api, event, args, Threads }) {
         );
     }
     
-    // ========== LOGOUT COMMAND ==========
-    if (args[0] === "logout") {
-        await api.sendMessage("🚪 Logging out... Goodbye!", threadID, messageID);
-        api.logout();
-        return;
-    }
-    
-    // ========== LOAD COMMAND - Reload config ==========
-    if (args[0] === "load") {
-        try {
-            delete require.cache[require.resolve(global.client.configPath)];
-            global.config = require(global.client.configPath);
-            return api.sendMessage("✅ Config reloaded successfully!\n\nChanges have been applied without restart.", threadID, messageID);
-        } catch (error) {
-            console.error("Load error:", error);
-            return api.sendMessage(`❌ Failed to reload config.\nError: ${error.message}`, threadID, messageID);
-        }
-    }
-    
     // ========== BOT INFO (DEFAULT) ==========
     const botID = api.getCurrentUserID();
     const botInfo = await api.getUserInfo(botID);
@@ -216,11 +158,8 @@ module.exports.run = async function({ api, event, args, Threads }) {
 
 💡 AVAILABLE COMMANDS (Bot Admin only):
 
-📝 /bot setmyname [name] - Set bot name in config & current group
 🌐 /bot language [en/bn/hi] - Change bot language
 🐛 /bot debug [on/off/status] - Toggle debug mode
-🔄 /bot load - Reload config
-🚪 /bot logout - Logout bot account
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     `;

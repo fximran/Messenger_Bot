@@ -13,7 +13,6 @@ const cron = require('node-cron');
 const db = new sqlite3.Database('./database.db');
 
 db.serialize(() => {
-    // Users table
     db.run(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -24,7 +23,6 @@ db.serialize(() => {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    // Activity logs table
     db.run(`CREATE TABLE IF NOT EXISTS activity_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -36,7 +34,6 @@ db.serialize(() => {
         FOREIGN KEY(user_id) REFERENCES users(id)
     )`);
 
-    // Default owner user
     db.get("SELECT id FROM users WHERE email = 'owner@example.com'", async (err, row) => {
         if (!row) {
             const hashedPassword = await bcrypt.hash('owner123', 10);
@@ -77,11 +74,9 @@ const BOT_DESC = pkg.description || "Islamick Chat Bot";
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Set EJS as template engine
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -194,7 +189,6 @@ app.get('/admin/settings', requireAuth, requirePermission(2), (req, res) => {
     res.render('settings', { user: req.session.user, currentPage: 'settings', pkgVersion: BOT_VERSION });
 });
 
-// Error page
 app.get('/error', (req, res) => res.render('error', { message: 'An error occurred' }));
 
 // ==================== API Routes ====================
@@ -280,7 +274,45 @@ app.get('/api/bot-logs', requireAuth, requirePermission(2), (req, res) => {
 
 // ----- Bot Status & Control -----
 app.get('/api/status', requireAuth, (req, res) => {
-    getPM2Status((status) => res.json({ ...status, botName: BOT_NAME, version: BOT_VERSION }));
+    getPM2Status((pm2Status) => {
+        const configPath = path.join(__dirname, "config.json");
+        let config = {};
+        try {
+            if (fs.existsSync(configPath)) {
+                config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+            }
+        } catch (e) { console.error("Config read error:", e); }
+
+        let commandCount = 0;
+        const commandsPath = path.join(__dirname, "Script", "commands");
+        if (fs.existsSync(commandsPath)) {
+            commandCount = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js')).length;
+        }
+
+        if (typeof global.debugMode === "undefined") global.debugMode = false;
+
+        const botId = config.BOT_ID || null;
+        const profileUrl = botId ? `https://www.facebook.com/profile.php?id=${botId}` : 'N/A';
+
+        res.json({
+            botName: config.BOTNAME || BOT_NAME,
+            botId: botId || 'N/A',
+            botProfile: profileUrl,
+            botPrefix: config.PREFIX || "/",
+            botLanguage: config.language || "en",
+            adminCount: Array.isArray(config.ADMINBOT) ? config.ADMINBOT.length : 0,
+            commandCount: commandCount,
+            debugMode: global.debugMode,
+            version: BOT_VERSION,
+            online: pm2Status.online,
+            status: pm2Status.status,
+            uptime: pm2Status.uptime,
+            uptimeSeconds: pm2Status.uptimeSeconds,
+            restartCount: pm2Status.restartCount,
+            cpu: pm2Status.cpu,
+            memory: pm2Status.memory
+        });
+    });
 });
 
 app.post('/api/start', requireAuth, (req, res) => {
