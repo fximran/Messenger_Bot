@@ -1,4 +1,4 @@
-const { spawn } = require("child_process");
+const { spawn, exec } = require("child_process");
 const axios = require("axios");
 const logger = require("./utils/log");
 const express = require("express");
@@ -25,56 +25,48 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
-// ==================== Bot Process Management ====================
-global.countRestart = global.countRestart || 0;
-let botProcess = null;
-let botStartTime = null;
+// ==================== PM2 Process Name ====================
+const PM2_PROCESS_NAME = "messenger-bot";
 
-function startBot(message) {
-    if (message) logger(message, "[ Starting ]");
-
-    if (botProcess) {
-        logger("Bot is already running.", "[ Info ]");
-        return;
-    }
-
-    botProcess = spawn("node", ["--trace-warnings", "--async-stack-traces", "Cyber.js"], {
-        cwd: __dirname,
-        stdio: "inherit",
-        shell: true
-    });
-
-    botStartTime = Date.now();
-
-    botProcess.on("close", (codeExit) => {
-        botProcess = null;
-        botStartTime = null;
-        if (codeExit !== 0 && global.countRestart < 5) {
-            global.countRestart += 1;
-            logger(`Bot exited with code ${codeExit}. Restarting... (${global.countRestart}/5)`, "[ Restarting ]");
-            startBot();
-        } else {
-            logger(`Bot stopped after ${global.countRestart} restarts.`, "[ Stopped ]");
-        }
-    });
-
-    botProcess.on("error", (error) => {
-        logger(`An error occurred: ${JSON.stringify(error)}`, "[ Error ]");
-    });
-}
-
-function stopBot() {
-    return new Promise((resolve) => {
-        if (!botProcess) {
-            resolve(false);
+// ==================== Helper: Get PM2 Bot Status ====================
+function getPM2Status(callback) {
+    exec(`pm2 jlist`, (error, stdout, stderr) => {
+        if (error) {
+            callback({ online: false, error: error.message });
             return;
         }
-        botProcess.once("close", () => {
-            botProcess = null;
-            botStartTime = null;
-            resolve(true);
-        });
-        botProcess.kill("SIGINT");
+        try {
+            const list = JSON.parse(stdout);
+            const bot = list.find(p => p.name === PM2_PROCESS_NAME);
+            if (!bot) {
+                callback({ online: false, status: 'stopped' });
+                return;
+            }
+            const uptime = bot.pm2_env?.pm_uptime ? Date.now() - bot.pm2_env.pm_uptime : 0;
+            const uptimeSeconds = Math.floor(uptime / 1000);
+            const days = Math.floor(uptimeSeconds / 86400);
+            const hours = Math.floor((uptimeSeconds % 86400) / 3600);
+            const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+            const seconds = uptimeSeconds % 60;
+
+            let uptimeString = "";
+            if (days > 0) uptimeString += `${days}d `;
+            if (hours > 0) uptimeString += `${hours}h `;
+            if (minutes > 0) uptimeString += `${minutes}m `;
+            uptimeString += `${seconds}s`;
+
+            callback({
+                online: bot.pm2_env?.status === 'online',
+                status: bot.pm2_env?.status,
+                uptime: uptimeString,
+                uptimeSeconds: uptimeSeconds,
+                restartCount: bot.pm2_env?.restart_time || 0,
+                cpu: bot.monit?.cpu || 0,
+                memory: bot.monit?.memory || 0
+            });
+        } catch (e) {
+            callback({ online: false, error: e.message });
+        }
     });
 }
 
@@ -90,62 +82,45 @@ app.get("/admin", (req, res) => {
 
 // ==================== API Routes ====================
 
-// GET /api/status - বটের বর্তমান অবস্থা
+// GET /api/status - বটের বর্তমান অবস্থা (PM2 থেকে)
 app.get("/api/status", (req, res) => {
-    const uptimeSeconds = botStartTime ? Math.floor((Date.now() - botStartTime) / 1000) : 0;
-    const days = Math.floor(uptimeSeconds / 86400);
-    const hours = Math.floor((uptimeSeconds % 86400) / 3600);
-    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
-    const seconds = uptimeSeconds % 60;
-
-    let uptimeString = "";
-    if (days > 0) uptimeString += `${days}d `;
-    if (hours > 0) uptimeString += `${hours}h `;
-    if (minutes > 0) uptimeString += `${minutes}m `;
-    uptimeString += `${seconds}s`;
-
-    res.json({
-        online: botProcess !== null,
-        uptime: uptimeString,
-        uptimeSeconds: uptimeSeconds,
-        restartCount: global.countRestart || 0,
-        botName: BOT_NAME,
-        version: BOT_VERSION
+    getPM2Status((status) => {
+        res.json({
+            ...status,
+            botName: BOT_NAME,
+            version: BOT_VERSION
+        });
     });
 });
 
-// POST /api/start - বট চালু করা
+// POST /api/start - PM2 দিয়ে বট চালু করা
 app.post("/api/start", (req, res) => {
-    if (botProcess) {
-        return res.status(400).json({ error: "Bot is already running." });
-    }
-    global.countRestart = 0;
-    startBot("Bot started from admin panel.");
-    res.json({ success: true, message: "Bot started." });
+    exec(`pm2 start ${PM2_PROCESS_NAME}`, (error, stdout, stderr) => {
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+        res.json({ success: true, message: "Bot started.", output: stdout });
+    });
 });
 
-// POST /api/stop - বট বন্ধ করা
-app.post("/api/stop", async (req, res) => {
-    if (!botProcess) {
-        return res.status(400).json({ error: "Bot is not running." });
-    }
-    const stopped = await stopBot();
-    if (stopped) {
-        res.json({ success: true, message: "Bot stopped." });
-    } else {
-        res.status(500).json({ error: "Failed to stop bot." });
-    }
+// POST /api/stop - PM2 দিয়ে বট বন্ধ করা
+app.post("/api/stop", (req, res) => {
+    exec(`pm2 stop ${PM2_PROCESS_NAME}`, (error, stdout, stderr) => {
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+        res.json({ success: true, message: "Bot stopped.", output: stdout });
+    });
 });
 
-// POST /api/restart - বট রিস্টার্ট করা
-app.post("/api/restart", async (req, res) => {
-    const wasRunning = botProcess !== null;
-    if (wasRunning) {
-        await stopBot();
-    }
-    global.countRestart = 0;
-    startBot("Bot restarted from admin panel.");
-    res.json({ success: true, message: "Bot restarted." });
+// POST /api/restart - PM2 দিয়ে বট রিস্টার্ট করা
+app.post("/api/restart", (req, res) => {
+    exec(`pm2 restart ${PM2_PROCESS_NAME}`, (error, stdout, stderr) => {
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+        res.json({ success: true, message: "Bot restarted.", output: stdout });
+    });
 });
 
 // GET /api/config - config.json পড়া
@@ -200,7 +175,7 @@ app.post("/api/appstate", (req, res) => {
     }
 });
 
-// ==================== Start Server & Bot ====================
+// ==================== Start Server ====================
 app.listen(port, () => {
     logger(`Server is running on port ${port}...`, "[ Starting ]");
     logger(`Admin panel: http://localhost:${port}/admin`, "[ Info ]");
@@ -228,5 +203,5 @@ axios.get("https://raw.githubusercontent.com/cyber-ullash/cyber-bot/main/data.js
         logger(`Failed to fetch update info: ${err.message}`, "[ Update Error ]");
     });
 
-// ==================== Start Bot ====================
-startBot();
+// বট অটো স্টার্ট হবে না; PM2 দিয়েই ম্যানেজ হবে।
+logger("Panel ready. Use PM2 to manage the bot process.", "[ Info ]");

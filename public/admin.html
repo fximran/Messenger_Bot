@@ -1,365 +1,273 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bot Admin Panel</title>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot Admin Panel (PM2)</title>
     <!-- Bootstrap 5 CSS -->
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
-    <!-- Font Awesome for icons -->
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
-    />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-      body {
-        background: #f8f9fa;
-        padding-bottom: 30px;
-      }
-      .card {
-        margin-bottom: 20px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-      }
-      textarea {
-        font-family: "Courier New", monospace;
-        font-size: 13px;
-        resize: vertical;
-      }
-      .badge-online {
-        background: #198754;
-      }
-      .badge-offline {
-        background: #dc3545;
-      }
-      .btn-group-custom .btn {
-        min-width: 100px;
-      }
+        body { background: #f8f9fa; padding-bottom: 30px; }
+        .card { margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        textarea { font-family: 'Courier New', monospace; font-size: 13px; resize: vertical; }
+        .badge-online { background: #198754; }
+        .badge-offline { background: #dc3545; }
+        .btn-group-custom .btn { min-width: 100px; }
     </style>
-  </head>
-  <body>
-    <nav class="navbar navbar-dark bg-dark mb-4">
-      <div class="container">
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-dark mb-4">
+    <div class="container">
         <span class="navbar-brand mb-0 h1">
-          <i class="fas fa-robot me-2"></i>Bot Control Panel
+            <i class="fas fa-robot me-2"></i>Bot Control Panel (PM2)
         </span>
         <span class="text-light">
-          <span id="nav-status-badge" class="badge bg-secondary"
-            >Checking...</span
-          >
+            <span id="nav-status-badge" class="badge bg-secondary">Checking...</span>
         </span>
-      </div>
-    </nav>
+    </div>
+</nav>
 
-    <div class="container">
-      <!-- Status Card -->
-      <div class="card">
+<div class="container">
+    <!-- Status Card -->
+    <div class="card">
         <div class="card-header bg-primary text-white">
-          <i class="fas fa-chart-line me-2"></i>Bot Status
+            <i class="fas fa-chart-line me-2"></i>Bot Status (PM2)
         </div>
         <div class="card-body">
-          <div class="row align-items-center">
-            <div class="col-md-6">
-              <p><strong>Bot Name:</strong> <span id="bot-name">-</span></p>
-              <p><strong>Version:</strong> <span id="bot-version">-</span></p>
-              <p>
-                <strong>Status:</strong>
-                <span id="bot-status-badge" class="badge bg-secondary"
-                  >Checking...</span
-                >
-              </p>
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <p><strong>Bot Name:</strong> <span id="bot-name">-</span></p>
+                    <p><strong>Version:</strong> <span id="bot-version">-</span></p>
+                    <p><strong>Status:</strong> <span id="bot-status-badge" class="badge bg-secondary">Checking...</span></p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Uptime:</strong> <span id="bot-uptime">-</span></p>
+                    <p><strong>Restarts:</strong> <span id="restart-count">0</span></p>
+                    <p><strong>CPU:</strong> <span id="bot-cpu">0</span>% | <strong>MEM:</strong> <span id="bot-mem">0</span> MB</p>
+                </div>
             </div>
-            <div class="col-md-6">
-              <p><strong>Uptime:</strong> <span id="bot-uptime">-</span></p>
-              <p>
-                <strong>Restart Count:</strong>
-                <span id="restart-count">0</span>
-              </p>
+            <div class="mt-2">
+                <button class="btn btn-outline-primary btn-sm" onclick="refreshStatus()">
+                    <i class="fas fa-sync-alt me-1"></i>Refresh Status
+                </button>
             </div>
-          </div>
-          <div class="mt-2">
-            <button
-              class="btn btn-outline-primary btn-sm"
-              onclick="refreshStatus()"
-            >
-              <i class="fas fa-sync-alt me-1"></i>Refresh Status
-            </button>
-          </div>
         </div>
-      </div>
-
-      <!-- Control Card -->
-      <div class="card">
-        <div class="card-header bg-success text-white">
-          <i class="fas fa-gamepad me-2"></i>Bot Control
-        </div>
-        <div class="card-body">
-          <div class="btn-group btn-group-custom" role="group">
-            <button class="btn btn-success" onclick="startBot()">
-              <i class="fas fa-play me-1"></i>Start
-            </button>
-            <button class="btn btn-warning text-white" onclick="stopBot()">
-              <i class="fas fa-stop me-1"></i>Stop
-            </button>
-            <button class="btn btn-danger" onclick="restartBot()">
-              <i class="fas fa-redo-alt me-1"></i>Restart
-            </button>
-          </div>
-          <div id="control-result" class="mt-2 text-muted"></div>
-        </div>
-      </div>
-
-      <!-- Config Editor Card -->
-      <div class="card">
-        <div class="card-header bg-info text-white">
-          <i class="fas fa-cog me-2"></i>config.json Editor
-        </div>
-        <div class="card-body">
-          <textarea
-            id="config-editor"
-            rows="10"
-            class="form-control mb-2"
-            placeholder="Loading config..."
-          ></textarea>
-          <div>
-            <button class="btn btn-secondary" onclick="loadConfig()">
-              <i class="fas fa-download me-1"></i>Load Config
-            </button>
-            <button class="btn btn-primary" onclick="saveConfig()">
-              <i class="fas fa-save me-1"></i>Save Config
-            </button>
-            <span id="config-result" class="ms-2"></span>
-            <small class="text-warning d-block mt-2">
-              <i class="fas fa-exclamation-triangle me-1"></i>Restart bot after
-              saving config to apply changes.
-            </small>
-          </div>
-        </div>
-      </div>
-
-      <!-- AppState Editor Card -->
-      <div class="card">
-        <div class="card-header bg-secondary text-white">
-          <i class="fas fa-key me-2"></i>appstate.json Editor
-        </div>
-        <div class="card-body">
-          <textarea
-            id="appstate-editor"
-            rows="10"
-            class="form-control mb-2"
-            placeholder="Loading appstate..."
-          ></textarea>
-          <div>
-            <button class="btn btn-secondary" onclick="loadAppState()">
-              <i class="fas fa-download me-1"></i>Load AppState
-            </button>
-            <button class="btn btn-primary" onclick="saveAppState()">
-              <i class="fas fa-save me-1"></i>Save AppState
-            </button>
-            <span id="appstate-result" class="ms-2"></span>
-            <small class="text-warning d-block mt-2">
-              <i class="fas fa-exclamation-triangle me-1"></i>Restart bot after
-              saving appstate to apply changes.
-            </small>
-          </div>
-        </div>
-      </div>
     </div>
 
-    <script>
-      // Helper function to format JSON
-      function formatJson(obj) {
-        return JSON.stringify(obj, null, 2);
-      }
+    <!-- Control Card -->
+    <div class="card">
+        <div class="card-header bg-success text-white">
+            <i class="fas fa-gamepad me-2"></i>PM2 Control
+        </div>
+        <div class="card-body">
+            <div class="btn-group btn-group-custom" role="group">
+                <button class="btn btn-success" onclick="startBot()">
+                    <i class="fas fa-play me-1"></i>PM2 Start
+                </button>
+                <button class="btn btn-warning text-white" onclick="stopBot()">
+                    <i class="fas fa-stop me-1"></i>PM2 Stop
+                </button>
+                <button class="btn btn-danger" onclick="restartBot()">
+                    <i class="fas fa-redo-alt me-1"></i>PM2 Restart
+                </button>
+            </div>
+            <div id="control-result" class="mt-2 text-muted"></div>
+            <small class="text-info d-block mt-2">
+                <i class="fas fa-info-circle"></i> These buttons directly control the PM2 process 'messenger-bot'.
+            </small>
+        </div>
+    </div>
 
-      // ==================== Status Functions ====================
-      async function refreshStatus() {
+    <!-- Config Editor Card -->
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <i class="fas fa-cog me-2"></i>config.json Editor
+        </div>
+        <div class="card-body">
+            <textarea id="config-editor" rows="10" class="form-control mb-2" placeholder="Loading config..."></textarea>
+            <div>
+                <button class="btn btn-secondary" onclick="loadConfig()">
+                    <i class="fas fa-download me-1"></i>Load Config
+                </button>
+                <button class="btn btn-primary" onclick="saveConfig()">
+                    <i class="fas fa-save me-1"></i>Save Config
+                </button>
+                <span id="config-result" class="ms-2"></span>
+                <small class="text-warning d-block mt-2">
+                    <i class="fas fa-exclamation-triangle me-1"></i>Restart bot after saving config to apply changes.
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- AppState Editor Card -->
+    <div class="card">
+        <div class="card-header bg-secondary text-white">
+            <i class="fas fa-key me-2"></i>appstate.json Editor
+        </div>
+        <div class="card-body">
+            <textarea id="appstate-editor" rows="10" class="form-control mb-2" placeholder="Loading appstate..."></textarea>
+            <div>
+                <button class="btn btn-secondary" onclick="loadAppState()">
+                    <i class="fas fa-download me-1"></i>Load AppState
+                </button>
+                <button class="btn btn-primary" onclick="saveAppState()">
+                    <i class="fas fa-save me-1"></i>Save AppState
+                </button>
+                <span id="appstate-result" class="ms-2"></span>
+                <small class="text-warning d-block mt-2">
+                    <i class="fas fa-exclamation-triangle me-1"></i>Restart bot after saving appstate to apply changes.
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function formatJson(obj) { return JSON.stringify(obj, null, 2); }
+
+    async function refreshStatus() {
         try {
-          const res = await fetch("/api/status");
-          const data = await res.json();
-
-          document.getElementById("bot-name").innerText = data.botName || "-";
-          document.getElementById("bot-version").innerText =
-            data.version || "-";
-          document.getElementById("restart-count").innerText =
-            data.restartCount || 0;
-
-          const statusBadge = document.getElementById("bot-status-badge");
-          const navBadge = document.getElementById("nav-status-badge");
-
-          if (data.online) {
-            statusBadge.className = "badge badge-online";
-            statusBadge.innerText = "ONLINE";
-            navBadge.className = "badge badge-online";
-            navBadge.innerText = "ONLINE";
-          } else {
-            statusBadge.className = "badge badge-offline";
-            statusBadge.innerText = "OFFLINE";
-            navBadge.className = "badge badge-offline";
-            navBadge.innerText = "OFFLINE";
-          }
-
-          document.getElementById("bot-uptime").innerText = data.uptime || "0s";
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            document.getElementById('bot-name').innerText = data.botName || '-';
+            document.getElementById('bot-version').innerText = data.version || '-';
+            document.getElementById('restart-count').innerText = data.restartCount || 0;
+            document.getElementById('bot-cpu').innerText = (data.cpu || 0).toFixed(1);
+            document.getElementById('bot-mem').innerText = ((data.memory || 0) / 1048576).toFixed(1);
+            const statusBadge = document.getElementById('bot-status-badge');
+            const navBadge = document.getElementById('nav-status-badge');
+            if (data.online) {
+                statusBadge.className = 'badge badge-online';
+                statusBadge.innerText = 'ONLINE';
+                navBadge.className = 'badge badge-online';
+                navBadge.innerText = 'ONLINE';
+            } else {
+                statusBadge.className = 'badge badge-offline';
+                statusBadge.innerText = data.status === 'stopped' ? 'STOPPED' : 'OFFLINE';
+                navBadge.className = 'badge badge-offline';
+                navBadge.innerText = 'OFFLINE';
+            }
+            document.getElementById('bot-uptime').innerText = data.uptime || '0s';
         } catch (error) {
-          console.error("Status error:", error);
-          document.getElementById("bot-status-badge").innerText = "ERROR";
+            console.error(error);
         }
-      }
+    }
 
-      // ==================== Control Functions ====================
-      async function startBot() {
-        const resultEl = document.getElementById("control-result");
-        resultEl.innerHTML =
-          '<i class="fas fa-spinner fa-spin"></i> Starting...';
+    async function startBot() {
+        const resultEl = document.getElementById('control-result');
+        resultEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting via PM2...';
         try {
-          const res = await fetch("/api/start", { method: "POST" });
-          const data = await res.json();
-          if (data.success) {
-            resultEl.innerHTML =
-              '<span class="text-success"><i class="fas fa-check-circle"></i> Bot started.</span>';
-            refreshStatus();
-          } else {
-            resultEl.innerHTML = `<span class="text-danger">Error: ${data.error}</span>`;
-          }
+            const res = await fetch('/api/start', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                resultEl.innerHTML = '<span class="text-success"><i class="fas fa-check-circle"></i> Bot started.</span>';
+                refreshStatus();
+            } else {
+                resultEl.innerHTML = `<span class="text-danger">Error: ${data.error}</span>`;
+            }
         } catch (error) {
-          resultEl.innerHTML = `<span class="text-danger">Request failed: ${error.message}</span>`;
+            resultEl.innerHTML = `<span class="text-danger">Request failed: ${error.message}</span>`;
         }
-      }
+    }
 
-      async function stopBot() {
-        const resultEl = document.getElementById("control-result");
-        if (!confirm("Are you sure you want to stop the bot?")) return;
-        resultEl.innerHTML =
-          '<i class="fas fa-spinner fa-spin"></i> Stopping...';
+    async function stopBot() {
+        const resultEl = document.getElementById('control-result');
+        if (!confirm('Are you sure you want to stop the bot?')) return;
+        resultEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Stopping via PM2...';
         try {
-          const res = await fetch("/api/stop", { method: "POST" });
-          const data = await res.json();
-          if (data.success) {
-            resultEl.innerHTML =
-              '<span class="text-warning"><i class="fas fa-stop-circle"></i> Bot stopped.</span>';
-            refreshStatus();
-          } else {
-            resultEl.innerHTML = `<span class="text-danger">Error: ${data.error}</span>`;
-          }
+            const res = await fetch('/api/stop', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                resultEl.innerHTML = '<span class="text-warning"><i class="fas fa-stop-circle"></i> Bot stopped.</span>';
+                refreshStatus();
+            } else {
+                resultEl.innerHTML = `<span class="text-danger">Error: ${data.error}</span>`;
+            }
         } catch (error) {
-          resultEl.innerHTML = `<span class="text-danger">Request failed: ${error.message}</span>`;
+            resultEl.innerHTML = `<span class="text-danger">Request failed: ${error.message}</span>`;
         }
-      }
+    }
 
-      async function restartBot() {
-        const resultEl = document.getElementById("control-result");
-        if (!confirm("Are you sure you want to restart the bot?")) return;
-        resultEl.innerHTML =
-          '<i class="fas fa-spinner fa-spin"></i> Restarting...';
+    async function restartBot() {
+        const resultEl = document.getElementById('control-result');
+        if (!confirm('Are you sure you want to restart the bot?')) return;
+        resultEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Restarting via PM2...';
         try {
-          const res = await fetch("/api/restart", { method: "POST" });
-          const data = await res.json();
-          if (data.success) {
-            resultEl.innerHTML =
-              '<span class="text-success"><i class="fas fa-check-circle"></i> Bot restarted.</span>';
-            setTimeout(refreshStatus, 3000);
-          } else {
-            resultEl.innerHTML = `<span class="text-danger">Error: ${data.error}</span>`;
-          }
+            const res = await fetch('/api/restart', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                resultEl.innerHTML = '<span class="text-success"><i class="fas fa-check-circle"></i> Bot restarted.</span>';
+                setTimeout(refreshStatus, 3000);
+            } else {
+                resultEl.innerHTML = `<span class="text-danger">Error: ${data.error}</span>`;
+            }
         } catch (error) {
-          resultEl.innerHTML = `<span class="text-danger">Request failed: ${error.message}</span>`;
+            resultEl.innerHTML = `<span class="text-danger">Request failed: ${error.message}</span>`;
         }
-      }
+    }
 
-      // ==================== Config Functions ====================
-      async function loadConfig() {
-        const resultEl = document.getElementById("config-result");
-        resultEl.innerHTML =
-          '<i class="fas fa-spinner fa-spin"></i> Loading...';
+    async function loadConfig() {
+        const resultEl = document.getElementById('config-result');
+        resultEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
         try {
-          const res = await fetch("/api/config");
-          const data = await res.json();
-          if (data.error) {
-            resultEl.innerHTML = `<span class="text-danger">${data.error}</span>`;
-            return;
-          }
-          document.getElementById("config-editor").value = formatJson(data);
-          resultEl.innerHTML =
-            '<span class="text-success">Config loaded.</span>';
+            const res = await fetch('/api/config');
+            const data = await res.json();
+            if (data.error) { resultEl.innerHTML = `<span class="text-danger">${data.error}</span>`; return; }
+            document.getElementById('config-editor').value = formatJson(data);
+            resultEl.innerHTML = '<span class="text-success">Config loaded.</span>';
         } catch (error) {
-          resultEl.innerHTML = `<span class="text-danger">Failed: ${error.message}</span>`;
+            resultEl.innerHTML = `<span class="text-danger">Failed: ${error.message}</span>`;
         }
-      }
+    }
 
-      async function saveConfig() {
-        const resultEl = document.getElementById("config-result");
-        const textarea = document.getElementById("config-editor");
+    async function saveConfig() {
+        const resultEl = document.getElementById('config-result');
+        const textarea = document.getElementById('config-editor');
         try {
-          const config = JSON.parse(textarea.value);
-          resultEl.innerHTML =
-            '<i class="fas fa-spinner fa-spin"></i> Saving...';
-          const res = await fetch("/api/config", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(config),
-          });
-          const data = await res.json();
-          if (data.success) {
-            resultEl.innerHTML =
-              '<span class="text-success"><i class="fas fa-check-circle"></i> Config saved.</span>';
-          } else {
-            resultEl.innerHTML = `<span class="text-danger">Error: ${data.error}</span>`;
-          }
+            const config = JSON.parse(textarea.value);
+            resultEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            const res = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
+            const data = await res.json();
+            resultEl.innerHTML = data.success ? '<span class="text-success">Config saved.</span>' : `<span class="text-danger">${data.error}</span>`;
         } catch (e) {
-          resultEl.innerHTML = `<span class="text-danger">Invalid JSON: ${e.message}</span>`;
+            resultEl.innerHTML = `<span class="text-danger">Invalid JSON: ${e.message}</span>`;
         }
-      }
+    }
 
-      // ==================== AppState Functions ====================
-      async function loadAppState() {
-        const resultEl = document.getElementById("appstate-result");
-        resultEl.innerHTML =
-          '<i class="fas fa-spinner fa-spin"></i> Loading...';
+    async function loadAppState() {
+        const resultEl = document.getElementById('appstate-result');
+        resultEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
         try {
-          const res = await fetch("/api/appstate");
-          const data = await res.json();
-          document.getElementById("appstate-editor").value = formatJson(data);
-          resultEl.innerHTML =
-            '<span class="text-success">AppState loaded.</span>';
+            const res = await fetch('/api/appstate');
+            const data = await res.json();
+            document.getElementById('appstate-editor').value = formatJson(data);
+            resultEl.innerHTML = '<span class="text-success">AppState loaded.</span>';
         } catch (error) {
-          resultEl.innerHTML = `<span class="text-danger">Failed: ${error.message}</span>`;
+            resultEl.innerHTML = `<span class="text-danger">Failed: ${error.message}</span>`;
         }
-      }
+    }
 
-      async function saveAppState() {
-        const resultEl = document.getElementById("appstate-result");
-        const textarea = document.getElementById("appstate-editor");
+    async function saveAppState() {
+        const resultEl = document.getElementById('appstate-result');
+        const textarea = document.getElementById('appstate-editor');
         try {
-          const state = JSON.parse(textarea.value);
-          resultEl.innerHTML =
-            '<i class="fas fa-spinner fa-spin"></i> Saving...';
-          const res = await fetch("/api/appstate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(state),
-          });
-          const data = await res.json();
-          if (data.success) {
-            resultEl.innerHTML =
-              '<span class="text-success"><i class="fas fa-check-circle"></i> AppState saved.</span>';
-          } else {
-            resultEl.innerHTML = `<span class="text-danger">Error: ${data.error}</span>`;
-          }
+            const state = JSON.parse(textarea.value);
+            resultEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            const res = await fetch('/api/appstate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
+            const data = await res.json();
+            resultEl.innerHTML = data.success ? '<span class="text-success">AppState saved.</span>' : `<span class="text-danger">${data.error}</span>`;
         } catch (e) {
-          resultEl.innerHTML = `<span class="text-danger">Invalid JSON: ${e.message}</span>`;
+            resultEl.innerHTML = `<span class="text-danger">Invalid JSON: ${e.message}</span>`;
         }
-      }
+    }
 
-      // ==================== Auto Refresh ====================
-      refreshStatus();
-      loadConfig();
-      loadAppState();
-      setInterval(refreshStatus, 10000); // Refresh status every 10 seconds
-    </script>
-
-    <!-- Bootstrap 5 JS (optional for some components) -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  </body>
+    refreshStatus(); loadConfig(); loadAppState();
+    setInterval(refreshStatus, 10000);
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
 </html>
