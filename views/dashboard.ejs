@@ -28,14 +28,11 @@
                         <div class="col-md-6">
                             <p><strong>📛 Name:</strong> <span id="bot-name">-</span></p>
                             <p><strong>🆔 ID:</strong> <span id="bot-id">-</span></p>
-                            <p><strong>🔗 Profile:</strong> <span id="bot-profile">-</span></p>
                             <p><strong>🔧 Prefix:</strong> <span id="bot-prefix">-</span></p>
-                            <p><strong>⚡ Commands:</strong> <span id="bot-commands">-</span></p>
+                            <p><strong>🌐 Language:</strong> <span id="bot-language">-</span></p>
                         </div>
                         <div class="col-md-6">
-                            <p><strong>🌐 Language:</strong> <span id="bot-language">-</span></p>
                             <p><strong>🐛 Debug Mode:</strong> <span id="bot-debug">-</span></p>
-                            <p><strong>👑 Admins:</strong> <span id="bot-admins">-</span></p>
                             <p><strong>📊 Status:</strong> <span id="bot-status-badge" class="badge bg-secondary">Checking...</span></p>
                             <p><strong>⏱️ Uptime:</strong> <span id="bot-uptime">-</span></p>
                             <p><strong>🔄 Restarts:</strong> <span id="restart-count">0</span></p>
@@ -94,20 +91,14 @@
     async function refreshStatus() {
         const res = await fetch('/api/status');
         const data = await res.json();
-
         document.getElementById('bot-name').innerText = data.botName || '-';
         document.getElementById('bot-id').innerText = data.botId || 'N/A';
-        document.getElementById('bot-profile').innerHTML = data.botProfile !== 'N/A' ? `<a href="${data.botProfile}" target="_blank">Profile Link</a>` : 'N/A';
         document.getElementById('bot-prefix').innerText = data.botPrefix || '/';
-        document.getElementById('bot-commands').innerText = data.commandCount || '0';
         document.getElementById('bot-language').innerText = data.botLanguage || 'en';
         document.getElementById('bot-debug').innerHTML = data.debugMode ? '✅ ON' : '❌ OFF';
-        document.getElementById('bot-admins').innerText = data.adminCount || '0';
-
         document.getElementById('restart-count').innerText = data.restartCount || 0;
         document.getElementById('bot-cpu').innerText = (data.cpu || 0).toFixed(1);
         document.getElementById('bot-mem').innerText = ((data.memory || 0) / 1048576).toFixed(1);
-
         const badge = document.getElementById('bot-status-badge');
         const navBadge = document.getElementById('nav-status-badge');
         if (data.online) {
@@ -117,7 +108,6 @@
             badge.className = 'badge badge-offline'; badge.innerText = data.status === 'stopped' ? 'STOPPED' : 'OFFLINE';
             if (navBadge) { navBadge.className = 'badge badge-offline'; navBadge.innerText = 'OFFLINE'; }
         }
-
         document.getElementById('bot-uptime').innerText = data.uptime || '0s';
     }
 

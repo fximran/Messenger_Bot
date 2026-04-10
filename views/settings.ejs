@@ -43,6 +43,10 @@
                             <label class="form-label">👑 Admin IDs</label>
                             <input type="text" id="quick-adminbot" class="form-control" placeholder="ID1, ID2">
                         </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">🆔 Bot Facebook ID</label>
+                            <input type="text" id="quick-botid" class="form-control" placeholder="e.g., 61574346729234">
+                        </div>
                     </div>
                     <button class="btn btn-success" onclick="saveQuickSettings()"><i class="fas fa-save"></i> Save Settings</button>
                     <span id="quick-result" class="ms-2"></span>
@@ -88,6 +92,7 @@
         document.getElementById('quick-language').value = config.language || 'en';
         const admin = Array.isArray(config.ADMINBOT) ? config.ADMINBOT.join(', ') : config.ADMINBOT || '';
         document.getElementById('quick-adminbot').value = admin;
+        document.getElementById('quick-botid').value = config.BOT_ID || '';
     }
 
     async function saveConfig() {
@@ -111,6 +116,7 @@
             config.BOTNAME = document.getElementById('quick-botname').value.trim();
             config.PREFIX = document.getElementById('quick-prefix').value.trim();
             config.language = document.getElementById('quick-language').value;
+            config.BOT_ID = document.getElementById('quick-botid').value.trim();
             const adminRaw = document.getElementById('quick-adminbot').value;
             config.ADMINBOT = adminRaw.split(',').map(id => id.trim()).filter(id => id);
             const saveRes = await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(config) });

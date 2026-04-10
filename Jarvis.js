@@ -13,6 +13,7 @@ const cron = require('node-cron');
 const db = new sqlite3.Database('./database.db');
 
 db.serialize(() => {
+    // Users table
     db.run(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -23,6 +24,7 @@ db.serialize(() => {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
+    // Activity logs table
     db.run(`CREATE TABLE IF NOT EXISTS activity_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -34,6 +36,7 @@ db.serialize(() => {
         FOREIGN KEY(user_id) REFERENCES users(id)
     )`);
 
+    // Default owner user
     db.get("SELECT id FROM users WHERE email = 'owner@example.com'", async (err, row) => {
         if (!row) {
             const hashedPassword = await bcrypt.hash('owner123', 10);
@@ -283,26 +286,18 @@ app.get('/api/status', requireAuth, (req, res) => {
             }
         } catch (e) { console.error("Config read error:", e); }
 
-        let commandCount = 0;
-        const commandsPath = path.join(__dirname, "Script", "commands");
-        if (fs.existsSync(commandsPath)) {
-            commandCount = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js')).length;
-        }
-
-        if (typeof global.debugMode === "undefined") global.debugMode = false;
+        // Use memory values if changed by bot command, otherwise config file
+        const currentLanguage = global.config?.language || config.language || "en";
+        const debugMode = typeof global.debugMode !== "undefined" ? global.debugMode : false;
 
         const botId = config.BOT_ID || null;
-        const profileUrl = botId ? `https://www.facebook.com/profile.php?id=${botId}` : 'N/A';
 
         res.json({
             botName: config.BOTNAME || BOT_NAME,
             botId: botId || 'N/A',
-            botProfile: profileUrl,
             botPrefix: config.PREFIX || "/",
-            botLanguage: config.language || "en",
-            adminCount: Array.isArray(config.ADMINBOT) ? config.ADMINBOT.length : 0,
-            commandCount: commandCount,
-            debugMode: global.debugMode,
+            botLanguage: currentLanguage,
+            debugMode: debugMode,
             version: BOT_VERSION,
             online: pm2Status.online,
             status: pm2Status.status,
