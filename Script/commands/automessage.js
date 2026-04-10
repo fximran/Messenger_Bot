@@ -3,18 +3,17 @@ const moment = require("moment-timezone");
 
 module.exports.config = {
     name: "automessage",
-    version: "3.1.0",
+    version: "3.3.0",
     credits: "MQL1 Community",
-    description: "Auto send messages in current group with individual timers",
+    description: "Auto send messages in a specific group (or current) with individual timers",
     commandCategory: "system",
-    usages: "add/list/on/off/default/status",
+    usages: "add/list/on/off/default/status [groupID]",
     cooldowns: 5
 };
 
-// Data storage path (per group) - এখন আলাদা ফোল্ডারে
+// Data storage path (per group)
 const basePath = __dirname + "/cache/automessage/";
 
-// ফোল্ডার তৈরি করুন (যদি না থাকে)
 if (!fs.existsSync(basePath)) {
     fs.mkdirSync(basePath, { recursive: true });
 }
@@ -23,7 +22,6 @@ function getDataPath(threadID) {
     return basePath + "automessage_" + threadID + ".json";
 }
 
-// Load data for specific group
 function loadData(threadID) {
     const path = getDataPath(threadID);
     if (!fs.existsSync(path)) {
@@ -32,13 +30,11 @@ function loadData(threadID) {
     return JSON.parse(fs.readFileSync(path, "utf-8"));
 }
 
-// Save data for specific group
 function saveData(threadID, data) {
     const path = getDataPath(threadID);
     fs.writeFileSync(path, JSON.stringify(data, null, 2));
 }
 
-// Send message to current group
 async function sendToGroup(api, threadID, message) {
     try {
         await api.sendMessage(message, threadID);
@@ -47,7 +43,6 @@ async function sendToGroup(api, threadID, message) {
     }
 }
 
-// Check and send scheduled messages for a group
 async function checkAndSendForGroup(api, threadID) {
     const data = loadData(threadID);
     if (!data.enabled) return;
@@ -68,7 +63,6 @@ async function checkAndSendForGroup(api, threadID) {
     }
 }
 
-// Check all groups every minute
 setInterval(async () => {
     const { api } = global.client;
     if (!api) return;
@@ -79,36 +73,118 @@ setInterval(async () => {
     }
 }, 60000);
 
+// Helper: extract target thread and remaining args
+async function parseTargetAndArgs(api, args, threadID) {
+    let targetThreadID = threadID;
+    let targetThreadName = "this group";
+    let remainingArgs = [...args];
+
+    // Case 1: Last arg is numeric (group ID)
+    const lastArg = args[args.length - 1];
+    if (lastArg && /^\d+$/.test(lastArg)) {
+        try {
+            const info = await api.getThreadInfo(lastArg);
+            if (info.isGroup) {
+                targetThreadID = lastArg;
+                targetThreadName = info.threadName || lastArg;
+                remainingArgs = args.slice(0, -1);
+                return { targetThreadID, targetThreadName, remainingArgs };
+            }
+        } catch (e) {}
+    }
+
+    // Case 2: For 'add' command, second arg might be numeric (group ID between interval and message)
+    if (args[0]?.toLowerCase() === 'add' && args.length >= 3) {
+        // If first arg is interval (numeric) and second arg is numeric and third arg exists
+        if (!isNaN(parseInt(args[1])) && parseInt(args[1]) > 0) {
+            // args[1] is interval, check if args[2] is numeric group ID
+            if (/^\d+$/.test(args[2])) {
+                const possibleGroupID = args[2];
+                try {
+                    const info = await api.getThreadInfo(possibleGroupID);
+                    if (info.isGroup) {
+                        targetThreadID = possibleGroupID;
+                        targetThreadName = info.threadName || possibleGroupID;
+                        // remaining args: command, interval, then message parts (skip group ID)
+                        remainingArgs = [args[0], args[1], ...args.slice(3)];
+                        return { targetThreadID, targetThreadName, remainingArgs };
+                    }
+                } catch (e) {}
+            }
+        } else {
+            // No interval given, first arg is command 'add', second arg might be group ID?
+            if (/^\d+$/.test(args[1])) {
+                const possibleGroupID = args[1];
+                try {
+                    const info = await api.getThreadInfo(possibleGroupID);
+                    if (info.isGroup) {
+                        targetThreadID = possibleGroupID;
+                        targetThreadName = info.threadName || possibleGroupID;
+                        remainingArgs = [args[0], ...args.slice(2)];
+                        return { targetThreadID, targetThreadName, remainingArgs };
+                    }
+                } catch (e) {}
+            }
+        }
+    }
+
+    // Case 3: For other commands, check if any arg is numeric group ID (usually last)
+    for (let i = args.length - 1; i >= 0; i--) {
+        if (/^\d+$/.test(args[i])) {
+            try {
+                const info = await api.getThreadInfo(args[i]);
+                if (info.isGroup) {
+                    targetThreadID = args[i];
+                    targetThreadName = info.threadName || args[i];
+                    remainingArgs = [...args.slice(0, i), ...args.slice(i + 1)];
+                    return { targetThreadID, targetThreadName, remainingArgs };
+                }
+            } catch (e) {}
+        }
+    }
+
+    return { targetThreadID, targetThreadName, remainingArgs };
+}
+
 module.exports.run = async ({ event, api, args, Threads }) => {
     const { threadID, messageID, senderID } = event;
-    let data = loadData(threadID);
     
-    // Check if user is admin
+    // Check if user is admin (bot admin)
     const isAdmin = global.config.ADMINBOT.includes(senderID);
-    
     if (!isAdmin) {
         return api.sendMessage("❌ Only bot admins can use this command!", threadID, messageID);
     }
+
+    // Parse target thread and remaining args
+    const { targetThreadID, targetThreadName, remainingArgs: cmdArgs } = await parseTargetAndArgs(api, args, threadID);
     
-    const cmd = args[0]?.toLowerCase();
+    const cmd = cmdArgs[0]?.toLowerCase();
+    let data = loadData(targetThreadID);
+    
+    // Helper to prefix target group info
+    const prefix = targetThreadID === threadID ? "" : `[Target: ${targetThreadName}]\n`;
     
     // ========== HELP ==========
     if (!cmd || cmd === "help") {
         return api.sendMessage(
+            prefix +
             `📖 AUTO MESSAGE COMMANDS\n━━━━━━━━━━━━━━━━━━━━\n\n` +
             `📝 Message Management:\n` +
-            `   /automessage add [interval] [message] - Add message with timer\n` +
-            `   /automessage add [message] - Add message (uses default timer)\n` +
-            `   /automessage list - Show all messages\n` +
-            `   /automessage removeall - Remove ALL messages\n\n` +
+            `   /automessage add [interval] [message] [groupID]\n` +
+            `   /automessage add [interval] [groupID] [message]\n` +
+            `   /automessage add [message] [groupID]\n` +
+            `   /automessage list [groupID]\n` +
+            `   /automessage removeall [groupID]\n\n` +
             `⚙️ Settings:\n` +
-            `   /automessage on - Enable auto send\n` +
-            `   /automessage off - Disable auto send\n` +
-            `   /automessage default [minutes] - Set default interval (1-1440)\n` +
-            `   /automessage status - Show current settings\n\n` +
+            `   /automessage on [groupID]\n` +
+            `   /automessage off [groupID]\n` +
+            `   /automessage default [minutes] [groupID]\n` +
+            `   /automessage status [groupID]\n\n` +
             `📌 Examples:\n` +
             `   /automessage add 5 🌅 Good morning!\n` +
-            `   /automessage add 📢 Reminder!`,
+            `   /automessage add 5 123456789 Hello World\n` +
+            `   /automessage add 📢 Reminder! 123456789\n` +
+            `   /automessage status 987654321`,
             threadID, messageID
         );
     }
@@ -118,14 +194,15 @@ module.exports.run = async ({ event, api, args, Threads }) => {
         let interval = null;
         let messageStart = 1;
         
-        if (args[1] && !isNaN(parseInt(args[1])) && parseInt(args[1]) > 0) {
-            interval = parseInt(args[1]);
+        // Check if first arg is numeric (interval)
+        if (cmdArgs[1] && !isNaN(parseInt(cmdArgs[1])) && parseInt(cmdArgs[1]) > 0) {
+            interval = parseInt(cmdArgs[1]);
             messageStart = 2;
         }
         
-        const message = args.slice(messageStart).join(" ");
+        const message = cmdArgs.slice(messageStart).join(" ");
         if (!message) {
-            return api.sendMessage(`❌ Please enter a message!\n\nExamples:\n   /automessage add 5 Hello\n   /automessage add Hello`, threadID, messageID);
+            return api.sendMessage(prefix + `❌ Please enter a message!\n\nExamples:\n   /automessage add 5 Hello\n   /automessage add 5 123456789 Hello`, threadID, messageID);
         }
         
         const newId = Date.now() + "_" + Math.random().toString(36).substr(2, 5);
@@ -134,18 +211,18 @@ module.exports.run = async ({ event, api, args, Threads }) => {
             text: message,
             interval: interval || null
         });
-        saveData(threadID, data);
+        saveData(targetThreadID, data);
         
         const intervalText = interval ? `every ${interval} minutes` : `using default timer (${data.defaultInterval} min)`;
-        return api.sendMessage(`✅ Message added!\n\n📝 ${message.substring(0, 100)}${message.length > 100 ? "..." : ""}\n⏱️ ${intervalText}\n📊 Total: ${data.messages.length}`, threadID, messageID);
+        return api.sendMessage(prefix + `✅ Message added!\n\n📝 ${message.substring(0, 100)}${message.length > 100 ? "..." : ""}\n⏱️ ${intervalText}\n📊 Total: ${data.messages.length}`, threadID, messageID);
     }
     
     // ========== LIST MESSAGES ==========
     if (cmd === "list") {
         if (data.messages.length === 0) {
-            return api.sendMessage("📋 No messages added yet!\n\n💡 Use /automessage add [message] to add messages.", threadID, messageID);
+            return api.sendMessage(prefix + "📋 No messages added yet!\n\n💡 Use /automessage add [message] to add messages.", threadID, messageID);
         }
-        let msg = `📋 MESSAGE LIST\n━━━━━━━━━━━━━━━━━━━━\n\n`;
+        let msg = prefix + `📋 MESSAGE LIST for ${targetThreadName}\n━━━━━━━━━━━━━━━━━━━━\n\n`;
         for (let i = 0; i < data.messages.length; i++) {
             const m = data.messages[i];
             const intervalText = m.interval ? `⏱️ ${m.interval} min` : `⏱️ Default (${data.defaultInterval} min)`;
@@ -159,7 +236,7 @@ module.exports.run = async ({ event, api, args, Threads }) => {
                     messageID: info.messageID,
                     author: senderID,
                     data: data,
-                    threadID: threadID
+                    threadID: targetThreadID
                 });
             }
         }, messageID);
@@ -169,36 +246,36 @@ module.exports.run = async ({ event, api, args, Threads }) => {
     if (cmd === "removeall" || cmd === "clear" || cmd === "deleteall") {
         data.messages = [];
         data.lastSent = {};
-        saveData(threadID, data);
-        return api.sendMessage(`✅ ALL MESSAGES CLEARED!\n\n📊 Total messages: 0\n💡 Add new messages: /automessage add [message]`, threadID, messageID);
+        saveData(targetThreadID, data);
+        return api.sendMessage(prefix + `✅ ALL MESSAGES CLEARED!\n\n📊 Total messages: 0\n💡 Add new messages: /automessage add [message]`, threadID, messageID);
     }
     
     // ========== ENABLE ==========
     if (cmd === "on") {
         if (data.messages.length === 0) {
-            return api.sendMessage(`❌ Cannot enable! No messages added.\n\n💡 First add messages: /automessage add [message]`, threadID, messageID);
+            return api.sendMessage(prefix + `❌ Cannot enable! No messages added.\n\n💡 First add messages: /automessage add [message]`, threadID, messageID);
         }
         data.enabled = true;
-        saveData(threadID, data);
-        return api.sendMessage(`✅ AUTO MESSAGE ENABLED\n━━━━━━━━━━━━━━━━━━━━\n\n📝 ${data.messages.length} messages in queue\n⏱️ Default: ${data.defaultInterval} min`, threadID, messageID);
+        saveData(targetThreadID, data);
+        return api.sendMessage(prefix + `✅ AUTO MESSAGE ENABLED for ${targetThreadName}\n━━━━━━━━━━━━━━━━━━━━\n\n📝 ${data.messages.length} messages in queue\n⏱️ Default: ${data.defaultInterval} min`, threadID, messageID);
     }
     
     // ========== DISABLE ==========
     if (cmd === "off") {
         data.enabled = false;
-        saveData(threadID, data);
-        return api.sendMessage(`❌ AUTO MESSAGE DISABLED\n\nNo more automatic messages will be sent.`, threadID, messageID);
+        saveData(targetThreadID, data);
+        return api.sendMessage(prefix + `❌ AUTO MESSAGE DISABLED for ${targetThreadName}\n\nNo more automatic messages will be sent.`, threadID, messageID);
     }
     
     // ========== SET DEFAULT INTERVAL ==========
     if (cmd === "default") {
-        const interval = parseInt(args[1]);
+        const interval = parseInt(cmdArgs[1]);
         if (isNaN(interval) || interval < 1 || interval > 1440) {
-            return api.sendMessage(`❌ Invalid interval! Enter 1-1440 minutes.\n\nExample: /automessage default 30`, threadID, messageID);
+            return api.sendMessage(prefix + `❌ Invalid interval! Enter 1-1440 minutes.\n\nExample: /automessage default 30 [groupID]`, threadID, messageID);
         }
         data.defaultInterval = interval;
-        saveData(threadID, data);
-        return api.sendMessage(`✅ Default interval set to ${interval} minutes!`, threadID, messageID);
+        saveData(targetThreadID, data);
+        return api.sendMessage(prefix + `✅ Default interval set to ${interval} minutes for ${targetThreadName}!`, threadID, messageID);
     }
     
     // ========== STATUS ==========
@@ -212,22 +289,22 @@ module.exports.run = async ({ event, api, args, Threads }) => {
         }
         
         return api.sendMessage(
-            `📊 AUTO MESSAGE STATUS\n━━━━━━━━━━━━━━━━━━━━\n\n` +
+            prefix +
+            `📊 AUTO MESSAGE STATUS for ${targetThreadName}\n━━━━━━━━━━━━━━━━━━━━\n\n` +
             `🔘 Status: ${data.enabled ? "✅ ENABLED" : "❌ DISABLED"}\n` +
             `⏱️ Default: ${data.defaultInterval} minutes\n` +
             `📝 Messages: ${data.messages.length}\n` +
             `   • Custom timer: ${msgWithTimer}\n` +
             `   • Default timer: ${msgWithDefault}\n\n` +
             `━━━━━━━━━━━━━━━━━━━━\n` +
-            `💡 /automessage add [min] [msg]\n` +
-            `💡 /automessage list\n` +
-            `💡 /automessage on/off`,
+            `💡 /automessage add [min] [msg] [groupID]\n` +
+            `💡 /automessage list [groupID]\n` +
+            `💡 /automessage on/off [groupID]`,
             threadID, messageID
         );
     }
     
-    // Unknown command
-    return api.sendMessage(`❌ Unknown command!\n\nUse /automessage help`, threadID, messageID);
+    return api.sendMessage(prefix + `❌ Unknown command!\n\nUse /automessage help`, threadID, messageID);
 };
 
 // ========== HANDLE REPLY FOR REMOVE/EDIT/REMOVEALL ==========
@@ -240,7 +317,6 @@ module.exports.handleReply = async function({ event, api, handleReply }) {
     const currentData = loadData(targetThread);
     const reply = body.toLowerCase().trim();
     
-    // ========== REMOVE ALL ==========
     if (reply === "removeall") {
         currentData.messages = [];
         currentData.lastSent = {};
@@ -248,18 +324,17 @@ module.exports.handleReply = async function({ event, api, handleReply }) {
         return api.sendMessage(`✅ ALL MESSAGES CLEARED!\n\n📊 Total messages: 0`, threadID, messageID);
     }
     
-    // ========== EDIT TIMER ==========
     if (reply.startsWith("edit")) {
         const parts = body.split(" ");
         if (parts.length < 3) {
-            return api.sendMessage(`❌ Invalid format!\n\nUse: edit [number] [new timer]\nExample: edit 2 10 (sets message 2 to 10 minutes)\n\n💡 To remove custom timer: edit 2 0 (uses default timer)`, threadID, messageID);
+            return api.sendMessage(`❌ Invalid format!\n\nUse: edit [number] [new timer]\nExample: edit 2 10`, threadID, messageID);
         }
         
         const num = parseInt(parts[1]);
         const newTimer = parseInt(parts[2]);
         
         if (isNaN(num) || num < 1 || num > currentData.messages.length) {
-            return api.sendMessage(`❌ Invalid message number! Use /automessage list to see numbers.`, threadID, messageID);
+            return api.sendMessage(`❌ Invalid message number!`, threadID, messageID);
         }
         
         if (newTimer === 0) {
@@ -274,14 +349,12 @@ module.exports.handleReply = async function({ event, api, handleReply }) {
         
         currentData.messages[num-1].interval = newTimer;
         saveData(targetThread, currentData);
-        
         return api.sendMessage(`✅ Message ${num} timer updated to ${newTimer} minutes!`, threadID, messageID);
     }
     
-    // ========== REMOVE BY NUMBER ==========
     const num = parseInt(body);
     if (isNaN(num) || num < 1 || num > currentData.messages.length) {
-        return api.sendMessage(`❌ Invalid number! Use /automessage list to see numbers.\n\n💡 Commands:\n   [number] - Remove message\n   edit [num] [timer] - Edit timer\n   removeall - Delete all`, threadID, messageID);
+        return api.sendMessage(`❌ Invalid number! Use /automessage list to see numbers.`, threadID, messageID);
     }
     
     const removed = currentData.messages.splice(num-1, 1);
