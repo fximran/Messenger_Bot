@@ -42,10 +42,12 @@
                         <div class="col-md-6 mb-3">
                             <label class="form-label">👑 Admin IDs</label>
                             <input type="text" id="quick-adminbot" class="form-control" placeholder="ID1, ID2">
+                            <small class="text-muted">Comma separated list for ADMINBOT</small>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">🆔 Bot Facebook ID</label>
-                            <input type="text" id="quick-botid" class="form-control" placeholder="e.g., 61574346729234">
+                            <label class="form-label">🆔 Bot Facebook ID (NDH)</label>
+                            <input type="text" id="quick-ndh" class="form-control" placeholder="ID1, ID2 (first used as Bot ID)">
+                            <small class="text-muted">Comma separated list for NDH</small>
                         </div>
                     </div>
                     <button class="btn btn-success" onclick="saveQuickSettings()"><i class="fas fa-save"></i> Save Settings</button>
@@ -90,9 +92,14 @@
         document.getElementById('quick-botname').value = config.BOTNAME || '';
         document.getElementById('quick-prefix').value = config.PREFIX || '/';
         document.getElementById('quick-language').value = config.language || 'en';
+
+        // ADMINBOT
         const admin = Array.isArray(config.ADMINBOT) ? config.ADMINBOT.join(', ') : config.ADMINBOT || '';
         document.getElementById('quick-adminbot').value = admin;
-        document.getElementById('quick-botid').value = config.BOT_ID || '';
+
+        // NDH
+        const ndh = Array.isArray(config.NDH) ? config.NDH.join(', ') : config.NDH || '';
+        document.getElementById('quick-ndh').value = ndh;
     }
 
     async function saveConfig() {
@@ -116,9 +123,15 @@
             config.BOTNAME = document.getElementById('quick-botname').value.trim();
             config.PREFIX = document.getElementById('quick-prefix').value.trim();
             config.language = document.getElementById('quick-language').value;
-            config.BOT_ID = document.getElementById('quick-botid').value.trim();
+
+            // ADMINBOT
             const adminRaw = document.getElementById('quick-adminbot').value;
             config.ADMINBOT = adminRaw.split(',').map(id => id.trim()).filter(id => id);
+
+            // NDH
+            const ndhRaw = document.getElementById('quick-ndh').value;
+            config.NDH = ndhRaw.split(',').map(id => id.trim()).filter(id => id);
+
             const saveRes = await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(config) });
             if(saveRes.ok) {
                 result.innerHTML = '<span class="text-success">Saved! Restart bot to apply.</span>';

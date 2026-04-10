@@ -286,11 +286,16 @@ app.get('/api/status', requireAuth, (req, res) => {
             }
         } catch (e) { console.error("Config read error:", e); }
 
-        // Use memory values if changed by bot command, otherwise config file
         const currentLanguage = global.config?.language || config.language || "en";
         const debugMode = typeof global.debugMode !== "undefined" ? global.debugMode : false;
 
-        const botId = config.BOT_ID || null;
+        // Use first ID from NDH array as Bot ID, or fallback to BOT_ID field
+        let botId = null;
+        if (Array.isArray(config.NDH) && config.NDH.length > 0) {
+            botId = config.NDH[0];
+        } else if (config.BOT_ID) {
+            botId = config.BOT_ID;
+        }
 
         res.json({
             botName: config.BOTNAME || BOT_NAME,
