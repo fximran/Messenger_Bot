@@ -79,8 +79,8 @@
         </div>
     </div>
 
-    <!-- Quick Config Settings Card -->
-    <div class="card">
+    <!-- Quick Config Settings Card (visible only for permission >= 2) -->
+    <div class="card" id="quick-settings-card" style="display: none;">
         <div class="card-header bg-primary text-white">
             <i class="fas fa-sliders-h me-2"></i>Quick Bot Settings
         </div>
@@ -113,8 +113,8 @@
         </div>
     </div>
 
-    <!-- Advanced Config Editor Card (Collapsible) -->
-    <div class="card">
+    <!-- Advanced Config Editor Card (visible only for permission >= 2) -->
+    <div class="card" id="json-editor-card" style="display: none;">
         <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
             <span><i class="fas fa-code me-2"></i>Advanced: config.json Editor</span>
             <button class="btn btn-sm btn-outline-light" onclick="toggleJsonEditor()">
@@ -129,7 +129,7 @@
         </div>
     </div>
 
-    <!-- AppState Editor Card -->
+    <!-- AppState Editor Card (visible for all logged-in users) -->
     <div class="card">
         <div class="card-header bg-dark text-white"><i class="fas fa-key me-2"></i>appstate.json Editor</div>
         <div class="card-body">
@@ -200,14 +200,18 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         userModal = new bootstrap.Modal(document.getElementById('userModal'));
-        fetchCurrentUser();
-        refreshStatus();
-        loadUsers();
-        loadConfig();
-        loadAppState();
-        loadActivityLog();
-        loadBotLogs();
-        setInterval(refreshStatus, 10000);
+        fetchCurrentUser().then(() => {
+            refreshStatus();
+            loadUsers();
+            loadAppState();
+            loadActivityLog();
+            loadBotLogs();
+            // Load config only if user has permission
+            if (currentUser && currentUser.permission >= 2) {
+                loadConfig();
+            }
+            setInterval(refreshStatus, 10000);
+        });
     });
 
     async function fetchCurrentUser() {
@@ -215,9 +219,22 @@
         if (res.ok) {
             const data = await res.json();
             currentUser = data.user;
-            document.getElementById('current-user').innerText = `👤 ${data.user.name}`;
-            if (data.user.permission < 2) document.getElementById('add-user-btn').style.display = 'none';
-        } else window.location.href = '/login';
+            document.getElementById('current-user').innerText = `👤 ${data.user.name} (${data.user.permission >= 2 ? 'Admin' : 'Member'})`;
+            
+            // Show/hide config sections based on permission
+            if (currentUser.permission >= 2) {
+                document.getElementById('quick-settings-card').style.display = 'block';
+                document.getElementById('json-editor-card').style.display = 'block';
+                document.getElementById('add-user-btn').style.display = 'inline-block';
+            } else {
+                document.getElementById('quick-settings-card').style.display = 'none';
+                document.getElementById('json-editor-card').style.display = 'none';
+                document.getElementById('add-user-btn').style.display = 'none';
+            }
+            return data.user;
+        } else {
+            window.location.href = '/login';
+        }
     }
 
     async function logout() {
@@ -246,12 +263,30 @@
         document.getElementById('bot-uptime').innerText = data.uptime || '0s';
     }
 
-    async function startBot() { await fetch('/api/start', {method:'POST'}); refreshStatus(); loadActivityLog(); }
-    async function stopBot() { if(confirm('Stop bot?')) { await fetch('/api/stop', {method:'POST'}); refreshStatus(); loadActivityLog(); } }
-    async function restartBot() { if(confirm('Restart bot?')) { await fetch('/api/restart', {method:'POST'}); setTimeout(refreshStatus, 3000); loadActivityLog(); } }
+    async function startBot() { 
+        if (!confirm('Start the bot?')) return;
+        await fetch('/api/start', {method:'POST'}); 
+        refreshStatus(); 
+        loadActivityLog(); 
+    }
+    
+    async function stopBot() { 
+        if(!confirm('Stop the bot?')) return;
+        await fetch('/api/stop', {method:'POST'}); 
+        refreshStatus(); 
+        loadActivityLog(); 
+    }
+    
+    async function restartBot() { 
+        if(!confirm('Restart the bot?')) return;
+        await fetch('/api/restart', {method:'POST'}); 
+        setTimeout(refreshStatus, 3000); 
+        loadActivityLog(); 
+    }
 
-    // Config / AppState
+    // Config (only for permission >= 2)
     async function loadConfig() {
+        if (!currentUser || currentUser.permission < 2) return;
         try {
             const res = await fetch('/api/config');
             const config = await res.json();
@@ -268,6 +303,10 @@
     }
 
     async function saveConfig() {
+        if (!currentUser || currentUser.permission < 2) {
+            alert('You do not have permission to edit config.');
+            return;
+        }
         const resultEl = document.getElementById('config-result');
         try {
             const config = JSON.parse(document.getElementById('config-editor').value);
@@ -286,6 +325,10 @@
     }
 
     async function saveQuickSettings() {
+        if (!currentUser || currentUser.permission < 2) {
+            alert('You do not have permission to edit config.');
+            return;
+        }
         const resultEl = document.getElementById('quick-settings-result');
         resultEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
         try {
@@ -317,13 +360,14 @@
         if (body.style.display === 'none') {
             body.style.display = 'block';
             icon.className = 'fas fa-chevron-up';
-            loadConfig();
+            if (currentUser && currentUser.permission >= 2) loadConfig();
         } else {
             body.style.display = 'none';
             icon.className = 'fas fa-chevron-down';
         }
     }
 
+    // AppState (allowed for all)
     async function loadAppState() {
         const res = await fetch('/api/appstate');
         document.getElementById('appstate-editor').value = JSON.stringify(await res.json(), null, 2);
@@ -356,13 +400,18 @@
         users.forEach(u => {
             const tr = document.createElement('tr');
             tr.innerHTML = `<td>${u.id}</td><td>${u.name}</td><td>${u.email}</td><td>${u.permission}</td><td>${u.created_at?.split(' ')[0]||''}</td>
-                <td><button class="btn btn-sm btn-outline-primary" onclick="editUser(${u.id})"><i class="fas fa-edit"></i></button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${u.id})" ${currentUser?.permission<3?'disabled':''}><i class="fas fa-trash"></i></button></td>`;
+                <td>
+                    ${currentUser && currentUser.permission >= 2 ? 
+                        `<button class="btn btn-sm btn-outline-primary" onclick="editUser(${u.id})"><i class="fas fa-edit"></i></button>` : ''}
+                    ${currentUser && currentUser.permission >= 3 ? 
+                        `<button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${u.id})"><i class="fas fa-trash"></i></button>` : ''}
+                </td>`;
             tbody.appendChild(tr);
         });
     }
 
     window.editUser = async (id) => {
+        if (!currentUser || currentUser.permission < 2) return;
         const res = await fetch('/api/users');
         const user = (await res.json()).find(u=>u.id===id);
         if(!user) return;
@@ -376,6 +425,7 @@
     };
 
     window.deleteUser = async (id) => {
+        if (!currentUser || currentUser.permission < 3) return;
         if(!confirm('Delete user?')) return;
         const res = await fetch(`/api/users/${id}`, {method:'DELETE'});
         if(res.ok) { loadUsers(); loadActivityLog(); }
@@ -383,6 +433,7 @@
     };
 
     window.showAddUserModal = () => {
+        if (!currentUser || currentUser.permission < 2) return;
         document.getElementById('userModalTitle').innerText = 'Add Member';
         document.getElementById('edit-user-id').value = '';
         document.getElementById('user-name').value = '';
@@ -393,6 +444,7 @@
     };
 
     window.saveUser = async () => {
+        if (!currentUser || currentUser.permission < 2) return;
         const id = document.getElementById('edit-user-id').value;
         const name = document.getElementById('user-name').value;
         const email = document.getElementById('user-email').value;
