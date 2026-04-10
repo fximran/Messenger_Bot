@@ -43,15 +43,10 @@
                     body: JSON.stringify({ email, password })
                 });
                 const data = await res.json();
-                if (data.success) {
-                    window.location.href = '/admin';
-                } else {
-                    errorEl.textContent = data.error;
-                    errorEl.classList.remove('d-none');
-                }
+                if (data.success) window.location.href = '/admin';
+                else { errorEl.textContent = data.error; errorEl.classList.remove('d-none'); }
             } catch (err) {
-                errorEl.textContent = 'Login failed.';
-                errorEl.classList.remove('d-none');
+                errorEl.textContent = 'Login failed.'; errorEl.classList.remove('d-none');
             }
         }
     </script>
