@@ -3,12 +3,12 @@ const moment = require("moment-timezone");
 
 module.exports.config = {
     name: "fbbox",
-    version: "1.1.0",
+    version: "1.2.0",
     hasPermssion: 2,
     credits: "MQL1 Community",
     description: "Export or add user IDs to box_exports files",
     commandCategory: "Admin",
-    usages: "export <GroupName> <IDs> | add <FileNumber> <IDs>",
+    usages: "export <GroupName> - <IDs> | add <FileNumber> <IDs>",
     cooldowns: 5
 };
 
@@ -47,8 +47,8 @@ module.exports.run = async function({ api, event, args }) {
     if (!cmd || (cmd !== "export" && cmd !== "add")) {
         return api.sendMessage(
             `📖 FBBOX COMMANDS\n━━━━━━━━━━━━━━━━━━━━\n\n` +
-            `📌 /fbbox export <GroupName> <ID1 ID2...>\n` +
-            `   Save IDs to a new file.\n\n` +
+            `📌 /fbbox export <GroupName> - <ID1 ID2...>\n` +
+            `   Save IDs to a new file. Use " - " to separate name and IDs.\n\n` +
             `📌 /fbbox add <FileNumber> <ID1 ID2...>\n` +
             `   Append IDs to an existing file.\n` +
             `   Use /box file list to see file numbers.\n\n` +
@@ -66,13 +66,24 @@ module.exports.run = async function({ api, event, args }) {
         }
         
         const afterExport = fullCommand.substring(exportIndex + 7).trim();
-        const firstSpaceIndex = afterExport.indexOf(' ');
-        if (firstSpaceIndex === -1) {
-            return api.sendMessage("❌ Please provide both group name and IDs!", threadID, messageID);
-        }
         
-        const groupName = afterExport.substring(0, firstSpaceIndex).trim();
-        const idsPart = afterExport.substring(firstSpaceIndex + 1).trim();
+        let groupName = "";
+        let idsPart = "";
+        
+        // Check for " - " separator first (space hyphen space)
+        const hyphenIndex = afterExport.indexOf(" - ");
+        if (hyphenIndex !== -1) {
+            groupName = afterExport.substring(0, hyphenIndex).trim();
+            idsPart = afterExport.substring(hyphenIndex + 3).trim();
+        } else {
+            // Fallback: split by first space
+            const firstSpaceIndex = afterExport.indexOf(' ');
+            if (firstSpaceIndex === -1) {
+                return api.sendMessage("❌ Please provide both group name and IDs!\nUse: /fbbox export <GroupName> - <IDs>", threadID, messageID);
+            }
+            groupName = afterExport.substring(0, firstSpaceIndex).trim();
+            idsPart = afterExport.substring(firstSpaceIndex + 1).trim();
+        }
         
         if (!groupName) {
             return api.sendMessage("❌ Please provide a group name!", threadID, messageID);
@@ -125,7 +136,6 @@ module.exports.run = async function({ api, event, args }) {
             return api.sendMessage("❌ No exported files found! Use /fbbox export first.", threadID, messageID);
         }
 
-        // Parse arguments: first arg after "add" is file number, rest is IDs
         if (args.length < 3) {
             return api.sendMessage(
                 `❌ Usage: /fbbox add <FileNumber> <ID1 ID2...>\n\n` +
@@ -143,7 +153,6 @@ module.exports.run = async function({ api, event, args }) {
             );
         }
 
-        // Extract IDs from remaining arguments (join all args after number)
         const idsPart = args.slice(2).join(" ");
         const newIds = extractIds(idsPart);
         if (newIds.length === 0) {
@@ -157,10 +166,7 @@ module.exports.run = async function({ api, event, args }) {
             const fileContent = fs.readFileSync(filepath, "utf8");
             const data = JSON.parse(fileContent);
 
-            // Create a Set of existing IDs for quick lookup
             const existingIds = new Set(data.members.map(m => m.id));
-            
-            // Track how many actually added (unique)
             let addedCount = 0;
             for (const id of newIds) {
                 if (!existingIds.has(id)) {
@@ -174,7 +180,6 @@ module.exports.run = async function({ api, event, args }) {
                 return api.sendMessage(`⚠️ All provided IDs already exist in the file!`, threadID, messageID);
             }
 
-            // Update metadata
             data.totalMembers = data.members.length;
             data.exportedAt = moment().tz("Asia/Dhaka").format("DD/MM/YYYY hh:mm:ss A");
 
