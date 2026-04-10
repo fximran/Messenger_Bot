@@ -275,6 +275,25 @@ app.get('/api/bot-logs', requireAuth, requirePermission(2), (req, res) => {
     });
 });
 
+// ----- Debug Mode Control (Global) -----
+if (typeof global.debugMode === "undefined") {
+    global.debugMode = false;
+}
+
+app.get('/api/debug', requireAuth, (req, res) => {
+    res.json({ debugMode: global.debugMode });
+});
+
+app.post('/api/debug', requireAuth, requirePermission(2), (req, res) => {
+    const { debugMode } = req.body;
+    if (typeof debugMode !== "boolean") {
+        return res.status(400).json({ error: "debugMode must be a boolean." });
+    }
+    global.debugMode = debugMode;
+    logActivity(req.session.user.id, req.session.user.name, 'DEBUG_MODE', `Set debug mode to ${debugMode ? 'ON' : 'OFF'}`, req);
+    res.json({ success: true, debugMode: global.debugMode });
+});
+
 // ----- Bot Status & Control -----
 app.get('/api/status', requireAuth, (req, res) => {
     getPM2Status((pm2Status) => {
@@ -287,7 +306,7 @@ app.get('/api/status', requireAuth, (req, res) => {
         } catch (e) { console.error("Config read error:", e); }
 
         const currentLanguage = global.config?.language || config.language || "en";
-        const debugMode = config.hasOwnProperty('DEBUG_MODE') ? config.DEBUG_MODE : (typeof global.debugMode !== "undefined" ? global.debugMode : false);
+        const debugMode = typeof global.debugMode !== "undefined" ? global.debugMode : false;
 
         let botId = null;
         if (Array.isArray(config.NDH) && config.NDH.length > 0) {
@@ -344,18 +363,14 @@ app.get('/api/config', requireAuth, requirePermission(2), (req, res) => {
         res.json(JSON.parse(fs.readFileSync(configPath, "utf8")));
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
-// ----- Config & AppState Editors -----
+
 app.post('/api/config', requireAuth, requirePermission(2), (req, res) => {
     const configPath = path.join(__dirname, "config.json");
     try {
         const newConfig = req.body;
         fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2), "utf8");
-        
-        // Update global.debugMode if present in config
-        if (typeof newConfig.DEBUG_MODE !== "undefined") {
-            global.debugMode = newConfig.DEBUG_MODE;
-        }
-        // Update global.config.language if present
+
+        // Update global language if changed via config
         if (typeof newConfig.language !== "undefined") {
             if (!global.config) global.config = {};
             global.config.language = newConfig.language;
@@ -363,9 +378,7 @@ app.post('/api/config', requireAuth, requirePermission(2), (req, res) => {
 
         logActivity(req.session.user.id, req.session.user.name, 'CONFIG_EDIT', 'Updated config.json', req);
         res.json({ success: true });
-    } catch (e) { 
-        res.status(500).json({ error: e.message }); 
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/appstate', requireAuth, (req, res) => {

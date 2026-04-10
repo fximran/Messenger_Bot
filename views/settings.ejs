@@ -99,7 +99,13 @@
         document.getElementById('quick-botname').value = config.BOTNAME || '';
         document.getElementById('quick-prefix').value = config.PREFIX || '/';
         document.getElementById('quick-language').value = config.language || 'en';
-        document.getElementById('quick-debug').value = config.DEBUG_MODE ? 'true' : 'false';
+
+        // Load debug mode from global endpoint
+        try {
+            const debugRes = await fetch('/api/debug');
+            const debugData = await debugRes.json();
+            document.getElementById('quick-debug').value = debugData.debugMode ? 'true' : 'false';
+        } catch(e) { console.error('Failed to load debug mode', e); }
 
         // ADMINBOT
         const admin = Array.isArray(config.ADMINBOT) ? config.ADMINBOT.join(', ') : config.ADMINBOT || '';
@@ -131,25 +137,38 @@
             config.BOTNAME = document.getElementById('quick-botname').value.trim();
             config.PREFIX = document.getElementById('quick-prefix').value.trim();
             config.language = document.getElementById('quick-language').value;
-            config.DEBUG_MODE = document.getElementById('quick-debug').value === 'true';
 
-            // ADMINBOT
             const adminRaw = document.getElementById('quick-adminbot').value;
             config.ADMINBOT = adminRaw.split(',').map(id => id.trim()).filter(id => id);
 
-            // NDH
             const ndhRaw = document.getElementById('quick-ndh').value;
             config.NDH = ndhRaw.split(',').map(id => id.trim()).filter(id => id);
 
             const saveRes = await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(config) });
-            if(saveRes.ok) {
-                result.innerHTML = '<span class="text-success">Saved! Restart bot to apply.</span>';
-                if(document.getElementById('json-body').style.display !== 'none') loadConfig();
-            } else {
+            if (!saveRes.ok) {
                 const err = await saveRes.json();
                 result.innerHTML = `<span class="text-danger">${err.error}</span>`;
+                return;
             }
-        } catch(e) { result.innerHTML = '<span class="text-danger">Failed</span>'; }
+
+            // Save debug mode separately to global
+            const debugValue = document.getElementById('quick-debug').value === 'true';
+            const debugRes = await fetch('/api/debug', { 
+                method:'POST', 
+                headers:{'Content-Type':'application/json'}, 
+                body: JSON.stringify({ debugMode: debugValue }) 
+            });
+            if (!debugRes.ok) {
+                const err = await debugRes.json();
+                result.innerHTML = `<span class="text-danger">Debug update failed: ${err.error}</span>`;
+                return;
+            }
+
+            result.innerHTML = '<span class="text-success">Saved! Restart bot to apply.</span>';
+            if(document.getElementById('json-body').style.display !== 'none') loadConfig();
+        } catch(e) { 
+            result.innerHTML = '<span class="text-danger">Failed</span>'; 
+        }
     }
 
     function toggleJson() {
