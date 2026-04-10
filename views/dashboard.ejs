@@ -110,7 +110,7 @@
         }
         document.getElementById('bot-uptime').innerText = data.uptime || '0s';
     }
-
+    
     async function startBot() { if(confirm('Start bot?')) { await fetch('/api/start', {method:'POST'}); refreshStatus(); loadActivityLog(); } }
     async function stopBot() { if(confirm('Stop bot?')) { await fetch('/api/stop', {method:'POST'}); refreshStatus(); loadActivityLog(); } }
     async function restartBot() { if(confirm('Restart bot?')) { await fetch('/api/restart', {method:'POST'}); setTimeout(refreshStatus, 3000); loadActivityLog(); } }

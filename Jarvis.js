@@ -289,16 +289,14 @@ app.get('/api/status', requireAuth, (req, res) => {
         const currentLanguage = global.config?.language || config.language || "en";
         const debugMode = typeof global.debugMode !== "undefined" ? global.debugMode : false;
 
-        // Use first ID from NDH array as Bot ID, or fallback to BOT_ID field
+        // Use first ID from NDH array as Bot ID
         let botId = null;
         if (Array.isArray(config.NDH) && config.NDH.length > 0) {
             botId = config.NDH[0];
-        } else if (config.BOT_ID) {
-            botId = config.BOT_ID;
         }
 
         res.json({
-            botName: config.BOTNAME || BOT_NAME,
+            botName: config.BOTNAME || "Unnamed Bot",   // strictly from config, no package.json fallback
             botId: botId || 'N/A',
             botPrefix: config.PREFIX || "/",
             botLanguage: currentLanguage,
