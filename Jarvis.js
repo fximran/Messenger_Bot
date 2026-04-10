@@ -287,7 +287,8 @@ app.get('/api/status', requireAuth, (req, res) => {
         } catch (e) { console.error("Config read error:", e); }
 
         const currentLanguage = global.config?.language || config.language || "en";
-        const debugMode = typeof global.debugMode !== "undefined" ? global.debugMode : false;
+        // Use config.DEBUG_MODE if defined, otherwise fallback to global.debugMode
+        const debugMode = config.hasOwnProperty('DEBUG_MODE') ? config.DEBUG_MODE : (typeof global.debugMode !== "undefined" ? global.debugMode : false);
 
         // Use first ID from NDH array as Bot ID
         let botId = null;
@@ -296,7 +297,7 @@ app.get('/api/status', requireAuth, (req, res) => {
         }
 
         res.json({
-            botName: config.BOTNAME || "Unnamed Bot",   // strictly from config, no package.json fallback
+            botName: config.BOTNAME || "Unnamed Bot",
             botId: botId || 'N/A',
             botPrefix: config.PREFIX || "/",
             botLanguage: currentLanguage,

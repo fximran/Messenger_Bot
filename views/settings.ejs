@@ -40,6 +40,13 @@
                             </select>
                         </div>
                         <div class="col-md-6 mb-3">
+                            <label class="form-label">🐛 Debug Mode</label>
+                            <select id="quick-debug" class="form-select">
+                                <option value="false">❌ OFF</option>
+                                <option value="true">✅ ON</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
                             <label class="form-label">👑 Admin IDs</label>
                             <input type="text" id="quick-adminbot" class="form-control" placeholder="ID1, ID2">
                             <small class="text-muted">Comma separated list for ADMINBOT</small>
@@ -92,6 +99,7 @@
         document.getElementById('quick-botname').value = config.BOTNAME || '';
         document.getElementById('quick-prefix').value = config.PREFIX || '/';
         document.getElementById('quick-language').value = config.language || 'en';
+        document.getElementById('quick-debug').value = config.DEBUG_MODE ? 'true' : 'false';
 
         // ADMINBOT
         const admin = Array.isArray(config.ADMINBOT) ? config.ADMINBOT.join(', ') : config.ADMINBOT || '';
@@ -123,6 +131,7 @@
             config.BOTNAME = document.getElementById('quick-botname').value.trim();
             config.PREFIX = document.getElementById('quick-prefix').value.trim();
             config.language = document.getElementById('quick-language').value;
+            config.DEBUG_MODE = document.getElementById('quick-debug').value === 'true';
 
             // ADMINBOT
             const adminRaw = document.getElementById('quick-adminbot').value;
