@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings - Bot Panel</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -11,34 +13,34 @@
     </style>
 </head>
 <body>
-<div class="d-flex">
-    <%- include('partials/sidebar') %>
+<div class="d-flex flex-column flex-md-row">
+    <%- include('partials/sidebar', { currentPage: 'settings' }) %>
     <div class="flex-grow-1">
         <%- include('partials/header') %>
-        <div class="container-fluid px-4 py-3">
+        <div class="container-fluid px-3 py-3">
             <!-- Quick Bot Settings -->
             <div class="card">
                 <div class="card-header bg-primary text-white"><i class="fas fa-sliders-h me-2"></i>Quick Bot Settings</div>
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label>🤖 Bot Name</label>
+                            <label class="form-label">🤖 Bot Name</label>
                             <input type="text" id="quick-botname" class="form-control" placeholder="e.g., Jarvis">
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label>🔧 Command Prefix</label>
+                            <label class="form-label">🔧 Command Prefix</label>
                             <input type="text" id="quick-prefix" class="form-control" placeholder="e.g., /">
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label>🌐 Bot Language</label>
+                            <label class="form-label">🌐 Bot Language</label>
                             <select id="quick-language" class="form-select">
                                 <option value="en">English</option>
-                                <option value="bn">বাংলা</option>
-                                <option value="hi">हिन्दी</option>
+                                <option value="bn">Bangla</option>
+                                <option value="hi">Hindi</option>
                             </select>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label>👑 Admin IDs</label>
+                            <label class="form-label">👑 Admin IDs</label>
                             <input type="text" id="quick-adminbot" class="form-control" placeholder="ID1, ID2">
                         </div>
                     </div>

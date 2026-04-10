@@ -1,13 +1,13 @@
 <nav class="navbar navbar-dark bg-dark px-3">
     <div class="container-fluid">
-        <button class="btn btn-dark d-md-none" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu">
+        <button class="btn btn-dark d-md-none me-2" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu" aria-expanded="false" aria-label="Toggle navigation">
             <i class="fas fa-bars"></i>
         </button>
-        <span class="navbar-brand mb-0 h1 ms-2"><i class="fas fa-robot me-2"></i>Bot Control Panel</span>
+        <span class="navbar-brand mb-0 h1"><i class="fas fa-robot me-2"></i>Bot Panel</span>
         <div class="d-flex ms-auto">
-            <span class="text-light me-3 d-none d-md-inline"><span id="nav-status-badge" class="badge bg-secondary">Checking...</span></span>
-            <span class="text-light me-3"><i class="fas fa-user-circle"></i> <%= user.name %> (<%= user.permission >= 2 ? 'Admin' : 'Member' %>)</span>
-            <a href="/api/logout" class="btn btn-sm btn-outline-light" onclick="logout(event)"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            <span class="text-light me-2 d-none d-sm-inline"><span id="nav-status-badge" class="badge bg-secondary">Checking...</span></span>
+            <span class="text-light me-2 d-none d-md-inline"><i class="fas fa-user-circle"></i> <%= user.name.split(' ')[0] %></span>
+            <a href="/api/logout" class="btn btn-sm btn-outline-light" onclick="logout(event)"><i class="fas fa-sign-out-alt"></i> <span class="d-none d-sm-inline">Logout</span></a>
         </div>
     </div>
 </nav>
