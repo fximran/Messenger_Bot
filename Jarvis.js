@@ -4,6 +4,36 @@ const logger = require("./utils/log");
 const express = require("express");
 const path = require("path");
 const fs = require("fs-extra");
+const session = require('express-session');
+const bcrypt = require('bcrypt');
+const sqlite3 = require('sqlite3').verbose();
+
+// ==================== Database Setup ====================
+const db = new sqlite3.Database('./database.db');
+
+db.serialize(() => {
+    // ইউজার টেবিল
+    db.run(`CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        permission INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    // ডিফল্ট Owner ইউজার তৈরি (যদি না থাকে)
+    db.get("SELECT id FROM users WHERE email = 'owner@example.com'", async (err, row) => {
+        if (!row) {
+            const hashedPassword = await bcrypt.hash('owner123', 10);
+            db.run("INSERT INTO users (name, email, password, permission) VALUES (?, ?, ?, ?)",
+                ['Owner', 'owner@example.com', hashedPassword, 3]
+            );
+            console.log("Default owner user created: owner@example.com / owner123");
+        }
+    });
+});
 
 // ==================== Load package.json ====================
 let pkg = {};
@@ -24,6 +54,32 @@ const port = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
+app.use(session({
+    secret: 'your-very-secret-key-change-this-in-production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 hours
+}));
+
+// ==================== Authentication Middleware ====================
+function requireAuth(req, res, next) {
+    if (req.session.user) {
+        next();
+    } else {
+        res.redirect('/login');
+    }
+}
+
+function requirePermission(level) {
+    return (req, res, next) => {
+        if (!req.session.user) return res.redirect('/login');
+        if (req.session.user.permission >= level) {
+            next();
+        } else {
+            res.status(403).json({ error: 'Forbidden: insufficient permission.' });
+        }
+    };
+}
 
 // ==================== PM2 Process Name ====================
 const PM2_PROCESS_NAME = "messenger-bot";
@@ -70,20 +126,139 @@ function getPM2Status(callback) {
     });
 }
 
-// ==================== Home Route ====================
-app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "index.html"));
+// ==================== Routes ====================
+
+// ----- Public routes -----
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-// ==================== Admin Panel Route ====================
-app.get("/admin", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "admin.html"));
+app.get('/', (req, res) => {
+    res.redirect('/login');
 });
 
-// ==================== API Routes ====================
+// ----- Authentication APIs -----
+app.post('/api/login', (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password required.' });
+    }
+    db.get('SELECT id, name, email, password, permission FROM users WHERE email = ?', [email], async (err, user) => {
+        if (err || !user) {
+            return res.status(401).json({ error: 'Invalid email or password.' });
+        }
+        const match = await bcrypt.compare(password, user.password);
+        if (!match) {
+            return res.status(401).json({ error: 'Invalid email or password.' });
+        }
+        req.session.user = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            permission: user.permission
+        };
+        res.json({ success: true, user: req.session.user });
+    });
+});
 
-// GET /api/status - বটের বর্তমান অবস্থা (PM2 থেকে)
-app.get("/api/status", (req, res) => {
+app.post('/api/logout', (req, res) => {
+    req.session.destroy();
+    res.json({ success: true });
+});
+
+app.get('/api/current-user', (req, res) => {
+    if (req.session.user) {
+        res.json({ user: req.session.user });
+    } else {
+        res.status(401).json({ error: 'Not logged in' });
+    }
+});
+
+// ----- Protected routes (requireAuth) -----
+app.get('/admin', requireAuth, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// ----- Member Management APIs (requireAuth + permission check) -----
+// GET all members (only admin can see all)
+app.get('/api/users', requireAuth, (req, res) => {
+    db.all('SELECT id, name, email, permission, created_at, updated_at FROM users ORDER BY id', (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+// POST create user (requires permission >= 2)
+app.post('/api/users', requireAuth, requirePermission(2), async (req, res) => {
+    const { name, email, password, permission } = req.body;
+    if (!name || !email || !password) {
+        return res.status(400).json({ error: 'Name, email and password are required.' });
+    }
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        db.run('INSERT INTO users (name, email, password, permission) VALUES (?, ?, ?, ?)',
+            [name, email, hashedPassword, permission || 0],
+            function(err) {
+                if (err) {
+                    if (err.message.includes('UNIQUE constraint failed')) {
+                        return res.status(400).json({ error: 'Email already exists.' });
+                    }
+                    return res.status(500).json({ error: err.message });
+                }
+                res.json({ success: true, id: this.lastID });
+            });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// PUT update user (requires permission >= 2)
+app.put('/api/users/:id', requireAuth, requirePermission(2), async (req, res) => {
+    const { id } = req.params;
+    const { name, email, password, permission } = req.body;
+
+    let updates = [];
+    let params = [];
+
+    if (name) { updates.push('name = ?'); params.push(name); }
+    if (email) { updates.push('email = ?'); params.push(email); }
+    if (permission !== undefined) { updates.push('permission = ?'); params.push(permission); }
+    if (password && password.trim() !== '') {
+        const hashed = await bcrypt.hash(password, 10);
+        updates.push('password = ?'); params.push(hashed);
+    }
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+
+    if (updates.length === 0) {
+        return res.status(400).json({ error: 'No fields to update.' });
+    }
+
+    params.push(id);
+    const query = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
+
+    db.run(query, params, function(err) {
+        if (err) {
+            if (err.message.includes('UNIQUE constraint failed')) {
+                return res.status(400).json({ error: 'Email already exists.' });
+            }
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ success: true });
+    });
+});
+
+// DELETE user (requires permission >= 3)
+app.delete('/api/users/:id', requireAuth, requirePermission(3), (req, res) => {
+    const { id } = req.params;
+    db.run('DELETE FROM users WHERE id = ?', id, function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: 'User not found.' });
+        res.json({ success: true });
+    });
+});
+
+// ----- Bot Status & Control APIs (requireAuth) -----
+app.get('/api/status', requireAuth, (req, res) => {
     getPM2Status((status) => {
         res.json({
             ...status,
@@ -93,43 +268,32 @@ app.get("/api/status", (req, res) => {
     });
 });
 
-// POST /api/start - PM2 দিয়ে বট চালু করা
-app.post("/api/start", (req, res) => {
+app.post('/api/start', requireAuth, (req, res) => {
     exec(`pm2 start ${PM2_PROCESS_NAME}`, (error, stdout, stderr) => {
-        if (error) {
-            return res.status(500).json({ error: error.message });
-        }
+        if (error) return res.status(500).json({ error: error.message });
         res.json({ success: true, message: "Bot started.", output: stdout });
     });
 });
 
-// POST /api/stop - PM2 দিয়ে বট বন্ধ করা
-app.post("/api/stop", (req, res) => {
+app.post('/api/stop', requireAuth, (req, res) => {
     exec(`pm2 stop ${PM2_PROCESS_NAME}`, (error, stdout, stderr) => {
-        if (error) {
-            return res.status(500).json({ error: error.message });
-        }
+        if (error) return res.status(500).json({ error: error.message });
         res.json({ success: true, message: "Bot stopped.", output: stdout });
     });
 });
 
-// POST /api/restart - PM2 দিয়ে বট রিস্টার্ট করা
-app.post("/api/restart", (req, res) => {
+app.post('/api/restart', requireAuth, (req, res) => {
     exec(`pm2 restart ${PM2_PROCESS_NAME}`, (error, stdout, stderr) => {
-        if (error) {
-            return res.status(500).json({ error: error.message });
-        }
+        if (error) return res.status(500).json({ error: error.message });
         res.json({ success: true, message: "Bot restarted.", output: stdout });
     });
 });
 
-// GET /api/config - config.json পড়া
-app.get("/api/config", (req, res) => {
+// ----- Config & AppState Editor APIs (requireAuth) -----
+app.get('/api/config', requireAuth, (req, res) => {
     const configPath = path.join(__dirname, "config.json");
     try {
-        if (!fs.existsSync(configPath)) {
-            return res.status(404).json({ error: "config.json not found." });
-        }
+        if (!fs.existsSync(configPath)) return res.status(404).json({ error: "config.json not found." });
         const data = fs.readFileSync(configPath, "utf8");
         res.json(JSON.parse(data));
     } catch (error) {
@@ -137,25 +301,20 @@ app.get("/api/config", (req, res) => {
     }
 });
 
-// POST /api/config - config.json আপডেট করা
-app.post("/api/config", (req, res) => {
+app.post('/api/config', requireAuth, (req, res) => {
     const configPath = path.join(__dirname, "config.json");
     try {
-        const newConfig = req.body;
-        fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2), "utf8");
-        res.json({ success: true, message: "Config saved. Restart bot to apply changes." });
+        fs.writeFileSync(configPath, JSON.stringify(req.body, null, 2), "utf8");
+        res.json({ success: true, message: "Config saved." });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// GET /api/appstate - appstate.json পড়া
-app.get("/api/appstate", (req, res) => {
+app.get('/api/appstate', requireAuth, (req, res) => {
     const appstatePath = path.join(__dirname, "appstate.json");
     try {
-        if (!fs.existsSync(appstatePath)) {
-            return res.json([]);
-        }
+        if (!fs.existsSync(appstatePath)) return res.json([]);
         const data = fs.readFileSync(appstatePath, "utf8");
         res.json(JSON.parse(data));
     } catch (error) {
@@ -163,13 +322,11 @@ app.get("/api/appstate", (req, res) => {
     }
 });
 
-// POST /api/appstate - appstate.json আপডেট করা
-app.post("/api/appstate", (req, res) => {
+app.post('/api/appstate', requireAuth, (req, res) => {
     const appstatePath = path.join(__dirname, "appstate.json");
     try {
-        const newState = req.body;
-        fs.writeFileSync(appstatePath, JSON.stringify(newState, null, 2), "utf8");
-        res.json({ success: true, message: "AppState saved. Restart bot to apply changes." });
+        fs.writeFileSync(appstatePath, JSON.stringify(req.body, null, 2), "utf8");
+        res.json({ success: true, message: "AppState saved." });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -178,7 +335,7 @@ app.post("/api/appstate", (req, res) => {
 // ==================== Start Server ====================
 app.listen(port, () => {
     logger(`Server is running on port ${port}...`, "[ Starting ]");
-    logger(`Admin panel: http://localhost:${port}/admin`, "[ Info ]");
+    logger(`Login at: http://localhost:${port}/login`, "[ Info ]");
 }).on("error", (err) => {
     if (err.code === "EACCES") {
         logger(`Permission denied. Cannot bind to port ${port}.`, "[ Error ]");
@@ -187,21 +344,5 @@ app.listen(port, () => {
     }
 });
 
-// ==================== Log Meta Info ====================
 logger(BOT_NAME, "[ NAME ]");
 logger(`Version: ${BOT_VERSION}`, "[ VERSION ]");
-logger(BOT_DESC, "[ DESCRIPTION ]");
-
-// ==================== GitHub Update Check (Optional) ====================
-axios.get("https://raw.githubusercontent.com/cyber-ullash/cyber-bot/main/data.json")
-    .then((res) => {
-        logger(res.data.name || BOT_NAME, "[ UPDATE NAME ]");
-        logger(`Version: ${res.data.version || BOT_VERSION}`, "[ UPDATE VERSION ]");
-        logger(res.data.description || BOT_DESC, "[ UPDATE DESCRIPTION ]");
-    })
-    .catch((err) => {
-        logger(`Failed to fetch update info: ${err.message}`, "[ Update Error ]");
-    });
-
-// বট অটো স্টার্ট হবে না; PM2 দিয়েই ম্যানেজ হবে।
-logger("Panel ready. Use PM2 to manage the bot process.", "[ Info ]");
