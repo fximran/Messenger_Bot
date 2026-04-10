@@ -73,6 +73,7 @@ const port = process.env.PORT || 3000;
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -83,6 +84,7 @@ app.use(session({
     cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }
 }));
 
+// ==================== Helper Functions ====================
 function requireAuth(req, res, next) {
     if (req.session.user) next();
     else res.redirect('/login');
@@ -176,6 +178,7 @@ app.get('/api/current-user', (req, res) => {
     else res.status(401).json({ error: 'Not logged in' });
 });
 
+// Admin view routes
 app.get('/admin', requireAuth, (req, res) => res.redirect('/admin/dashboard'));
 app.get('/admin/dashboard', requireAuth, (req, res) => {
     res.render('dashboard', { user: req.session.user, currentPage: 'dashboard', pkgVersion: BOT_VERSION });
@@ -264,7 +267,7 @@ app.get('/api/bot-logs', requireAuth, requirePermission(2), (req, res) => {
     });
 });
 
-// ----- Bot Status -----
+// ----- Bot Status & Control -----
 app.get('/api/status', requireAuth, (req, res) => {
     getPM2Status((pm2Status) => {
         const config = readConfig();
@@ -288,7 +291,6 @@ app.get('/api/status', requireAuth, (req, res) => {
         });
     });
 });
-
 app.post('/api/start', requireAuth, (req, res) => {
     exec(`pm2 start ${PM2_PROCESS_NAME}`, (error) => {
         if (error) return res.status(500).json({ error: error.message });
@@ -310,21 +312,12 @@ app.post('/api/restart', requireAuth, (req, res) => {
         res.json({ success: true });
     });
 });
-
-// POST /api/restart-panel - Restart the web panel itself
 app.post('/api/restart-panel', requireAuth, requirePermission(2), (req, res) => {
-    // Log the action before restarting
     logActivity(req.session.user.id, req.session.user.name, 'PANEL_RESTART', 'Restarting messenger-panel', req);
-    
-    // Send response immediately
     res.json({ success: true, message: 'Panel restart initiated.' });
-    
-    // Execute restart after a short delay to allow response to be sent
     setTimeout(() => {
-        exec(`pm2 restart messenger-panel`, (error, stdout, stderr) => {
-            if (error) {
-                console.error('Panel restart error:', error);
-            }
+        exec(`pm2 restart messenger-panel`, (error) => {
+            if (error) console.error('Panel restart error:', error);
         });
     }, 500);
 });
@@ -367,12 +360,10 @@ app.post('/api/appstate', requireAuth, (req, res) => {
 
 // ----- Group Files Management (box_exports) -----
 const boxExportPath = path.join(__dirname, "cache", "box_exports");
+if (!fs.existsSync(boxExportPath)) fs.mkdirSync(boxExportPath, { recursive: true });
 
 app.get('/api/groupfiles', requireAuth, requirePermission(2), (req, res) => {
     try {
-        if (!fs.existsSync(boxExportPath)) {
-            return res.json([]);
-        }
         const files = fs.readdirSync(boxExportPath)
             .filter(f => f.endsWith('.json'))
             .map(f => {
@@ -387,8 +378,8 @@ app.get('/api/groupfiles', requireAuth, requirePermission(2), (req, res) => {
                 } catch (e) {}
                 return {
                     filename: f,
-                    groupName: groupName,
-                    totalMembers: totalMembers,
+                    groupName,
+                    totalMembers,
                     size: stats.size,
                     modified: stats.mtime
                 };
@@ -403,33 +394,24 @@ app.get('/api/groupfiles/download/:filename', requireAuth, requirePermission(2),
     const filename = req.params.filename;
     const filePath = path.join(boxExportPath, filename);
     try {
-        if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ error: 'File not found' });
-        }
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
         res.download(filePath, filename);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-const upload = multer({ 
-    dest: boxExportPath,
-    fileFilter: (req, file, cb) => {
-        if (file.originalname.endsWith('.json')) {
-            cb(null, true);
-        } else {
-            cb(new Error('Only JSON files are allowed'));
-        }
-    }
-});
-
+const upload = multer({ dest: boxExportPath });
 app.post('/api/groupfiles/upload', requireAuth, requirePermission(2), upload.single('file'), (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No file uploaded' });
-        }
+        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
         const originalName = req.file.originalname;
+        if (!originalName.endsWith('.json')) {
+            fs.unlinkSync(req.file.path);
+            return res.status(400).json({ error: 'Only JSON files are allowed' });
+        }
         const newPath = path.join(boxExportPath, originalName);
+        if (fs.existsSync(newPath)) fs.unlinkSync(newPath);
         fs.renameSync(req.file.path, newPath);
         logActivity(req.session.user.id, req.session.user.name, 'UPLOAD_GROUPFILE', `Uploaded ${originalName}`, req);
         res.json({ success: true, filename: originalName });
@@ -442,9 +424,7 @@ app.delete('/api/groupfiles/:filename', requireAuth, requirePermission(2), (req,
     const filename = req.params.filename;
     const filePath = path.join(boxExportPath, filename);
     try {
-        if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ error: 'File not found' });
-        }
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
         fs.unlinkSync(filePath);
         logActivity(req.session.user.id, req.session.user.name, 'DELETE_GROUPFILE', `Deleted ${filename}`, req);
         res.json({ success: true });
