@@ -1,12 +1,31 @@
+# Dependencies
 node_modules/
+
+# Sensitive bot data
 appstate.json
 config.json
+
+# Visual Studio IDE
 .vs/
+
+# Log files
 *.log
 logs/
+
+# Temporary files
 temp/
 tmp/
 .cache/
 
+# Bot cache data (auto-generated)
 cache/automessage/
 cache/box_exports/
+
+# Database file (if using SQLite locally)
+database.db
+
+# Environment variables (if any)
+.env
+
+# PM2 process file (optional)
+ecosystem.config.js
