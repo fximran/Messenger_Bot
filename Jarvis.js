@@ -359,7 +359,7 @@ app.post('/api/appstate', requireAuth, (req, res) => {
 });
 
 // ----- Group Files Management (box_exports) -----
-const boxExportPath = path.join(__dirname, "cache", "box_exports");
+const boxExportPath = path.join(__dirname, "Script", "commands", "cache", "box_exports");
 if (!fs.existsSync(boxExportPath)) fs.mkdirSync(boxExportPath, { recursive: true });
 
 app.get('/api/groupfiles', requireAuth, requirePermission(2), (req, res) => {
