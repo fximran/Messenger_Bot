@@ -1,6 +1,6 @@
 # 🚀 Messenger Bot - Complete Server Setup Guide
 
-A custom-edited Facebook Messenger bot based on the CYBER-BOT-COMMUNITY source project, now with a Web Admin Panel.
+A custom-edited Facebook Messenger bot based on the CYBER-BOT-COMMUNITY source project, now with a **Web Admin Panel**.
 
 ---
 
@@ -26,9 +26,10 @@ This project is mainly intended for personal use, testing, and learning purposes
 - Easy to extend & customize
 - Command-based interaction system
 - 24/7 running support using PM2
-- Web Admin Panel (Control bot, edit config, manage users)
-- Activity Log & Bot Logs Viewer
-- Secure Login System with permission levels
+- **Web Admin Panel** (Control bot, edit config, manage users)
+- **Activity Log & Bot Logs Viewer**
+- **Auto-clean old activity logs (30 days)**
+- **Secure Login System** with permission levels
 
 ---
 
@@ -43,14 +44,27 @@ This project is mainly intended for personal use, testing, and learning purposes
 
 ## ⚙️ Installation
 
-sudo apt update && sudo apt upgrade -y
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs git
-npm install -g pm2
+1. Update system and install Node.js:
+   sudo apt update && sudo apt upgrade -y
+   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+   sudo apt install -y nodejs git
 
-git clone https://github.com/fximran/Messenger_Bot
-cd Messenger_Bot
-npm install
+2. Install PM2 globally:
+   npm install -g pm2
+
+3. Clone the repository and install dependencies:
+   git clone https://github.com/fximran/Messenger_Bot
+   cd Messenger_Bot
+   npm install
+
+4. **IMPORTANT: Install additional required packages for the Web Panel:**
+   npm install bcrypt express-session sqlite3 node-cron
+
+   _Explanation of these packages:_
+   - `bcrypt` : For password hashing (security)
+   - `express-session` : For user login sessions
+   - `sqlite3` : For storing user data and activity logs
+   - `node-cron` : For auto-cleaning old logs daily
 
 ---
 
@@ -59,55 +73,65 @@ npm install
 1. Copy example config:
    cp config.json.example config.json
 
-2. Edit config.json:
+2. Edit `config.json`:
    nano config.json
-   - ADMINBOT → Your Facebook ID
-   - BOTNAME → Bot name
-   - PREFIX → Command prefix
-   - language → en / bn / hi
 
-3. Add appstate.json (Facebook cookies) in the root directory.
+   Modify these fields:
+   - `ADMINBOT` : Your Facebook user ID
+   - `BOTNAME` : The name of your bot
+   - `PREFIX` : Command prefix (e.g., "/")
+   - `language` : "en", "bn", or "hi"
+
+3. Add `appstate.json` (Facebook cookies) in the root directory.
+   Without this, the bot cannot log in.
 
 ---
 
-## 🖥️ Web Admin Panel (New!)
+## 🖥️ Web Admin Panel
 
-The bot includes a web-based control panel accessible at:
-http://your-server-ip:3000
+The bot includes a **web-based control panel** accessible at:
 
-### Default Login
+### 🔑 Default Login
 
-- Email: owner@example.com
-- Password: owner123
+- **Email:** `owner@example.com`
+- **Password:** `owner@123`
 
-⚠️ Change the default password immediately after first login!
+⚠️ **Change the default password immediately after first login!**
+(Go to Members Management -> Edit User)
 
-### Panel Features
+### 📊 Panel Features
 
-- Bot Status & Control: Start / Stop / Restart the bot via PM2.
-- Config Editor: Edit config.json directly from browser.
-- AppState Editor: Update Facebook session cookies easily.
-- User Management: Add / Edit / Delete panel users with permission levels.
-- Activity Log: Track who did what and when.
-- Bot Logs Viewer: See live PM2 logs of the bot.
+- **Bot Status & Control:** Start / Stop / Restart the bot via PM2.
+- **Config Editor:** Edit `config.json` directly from your browser.
+- **AppState Editor:** Update Facebook session cookies easily.
+- **User Management:** Add / Edit / Delete panel users with permission levels (0=Member, 1=Mod, 2=Admin, 3=Owner).
+- **Activity Log:** Track who did what and when.
+- **Bot Logs Viewer:** See live PM2 logs of the bot.
 
 ---
 
 # 🔁 Run Methods
 
-## 🚀 Method 1: Standard Run (Recommended for production)
+## 🚀 Method 1: Standard Run (Recommended for 24/7)
 
-Use PM2 to keep the bot and panel alive 24/7.
+Use PM2 to keep both the bot and the panel alive.
 
-pm2 start Cyber.js --name messenger-bot
-pm2 start Jarvis.js --name messenger-panel
-pm2 save
-pm2 startup
+1. Start the bot (main process):
+   pm2 start Cyber.js --name messenger-bot
+
+2. Start the web panel:
+   pm2 start Jarvis.js --name messenger-panel
+
+3. Save PM2 process list for auto-start on reboot:
+   pm2 save
+   pm2 startup
 
 ## 🛠️ Method 2: Development Run (Without PM2)
 
-Terminal 1 (Bot): node Cyber.js
-Terminal 2 (Panel): node Jarvis.js
+Open two terminal windows/tabs:
+
+- **Terminal 1 (Bot):** `node Cyber.js`
+- **Terminal 2 (Panel):** `node Jarvis.js`
 
 ---
 
@@ -123,25 +147,25 @@ Terminal 2 (Panel): node Jarvis.js
 | Stop Panel    | pm2 stop messenger-panel                   |
 | Delete Bot    | pm2 delete messenger-bot                   |
 | Delete Panel  | pm2 delete messenger-panel                 |
-| Status        | pm2 list                                   |
-| Logs (Bot)    | pm2 logs messenger-bot                     |
-| Logs (Panel)  | pm2 logs messenger-panel                   |
+| List all      | pm2 list                                   |
+| Bot Logs      | pm2 logs messenger-bot                     |
+| Panel Logs    | pm2 logs messenger-panel                   |
 
 ---
 
 ## 🔒 Security Notes
 
 - The web panel is protected by login. Only authorized users can access.
-- Keep appstate.json and config.json secure. Do not commit them to public repositories.
-- Change the default owner@example.com password immediately.
-- Use a firewall to restrict access to port 3000 if needed.
+- Keep `appstate.json` and `config.json` secure. **NEVER** commit them to public repositories.
+- Change the default `owner@example.com` password immediately.
+- Use a firewall (`ufw`) to restrict access to port `3000` if needed.
 
 ---
 
 ## 🙏 Credits
 
 - Original source: CYBER-BOT-COMMUNITY
-- Modified & Enhanced by: fximran
+- Modified & Enhanced by: **fximran**
 
 ---
 
