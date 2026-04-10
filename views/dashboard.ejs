@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard - Bot Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background: #f8f9fa; }
+        .card { margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        pre { background: #1e1e1e; color: #ddd; padding: 10px; border-radius: 5px; font-size: 12px; }
+        .badge-online { background: #198754; }
+        .badge-offline { background: #dc3545; }
+    </style>
+</head>
+<body>
+<div class="d-flex">
+    <%- include('partials/sidebar') %>
+    <div class="flex-grow-1">
+        <%- include('partials/header') %>
+        <div class="container-fluid px-4 py-3">
+            <!-- Status Card -->
+            <div class="card">
+                <div class="card-header bg-primary text-white"><i class="fas fa-chart-line me-2"></i>Bot Status (PM2)</div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Bot Name:</strong> <span id="bot-name">-</span></p>
+                            <p><strong>Version:</strong> <span id="bot-version">-</span></p>
+                            <p><strong>Status:</strong> <span id="bot-status-badge" class="badge bg-secondary">Checking...</span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Uptime:</strong> <span id="bot-uptime">-</span></p>
+                            <p><strong>Restarts:</strong> <span id="restart-count">0</span></p>
+                            <p><strong>CPU:</strong> <span id="bot-cpu">0</span>% | <strong>MEM:</strong> <span id="bot-mem">0</span> MB</p>
+                        </div>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm mt-2" onclick="refreshStatus()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                </div>
+            </div>
+
+            <!-- Control Card -->
+            <div class="card">
+                <div class="card-header bg-success text-white"><i class="fas fa-gamepad me-2"></i>PM2 Control</div>
+                <div class="card-body">
+                    <div class="btn-group">
+                        <button class="btn btn-success" onclick="startBot()"><i class="fas fa-play"></i> Start</button>
+                        <button class="btn btn-warning text-white" onclick="stopBot()"><i class="fas fa-stop"></i> Stop</button>
+                        <button class="btn btn-danger" onclick="restartBot()"><i class="fas fa-redo-alt"></i> Restart</button>
+                    </div>
+                    <div id="control-result" class="mt-2 text-muted"></div>
+                </div>
+            </div>
+
+            <!-- Activity Log Card -->
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <i class="fas fa-history me-2"></i>Activity Log
+                    <button class="btn btn-sm btn-outline-dark float-end" onclick="loadActivityLog()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                </div>
+                <div class="card-body" style="max-height:300px; overflow-y:auto;">
+                    <table class="table table-sm table-hover">
+                        <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th><th>IP</th></tr></thead>
+                        <tbody id="activity-log-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Bot Logs Card -->
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <i class="fas fa-terminal me-2"></i>Bot Logs (PM2)
+                    <button class="btn btn-sm btn-outline-light float-end" onclick="loadBotLogs()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                </div>
+                <div class="card-body">
+                    <pre id="bot-logs-content" style="max-height:400px; overflow-y:auto;">Loading...</pre>
+                </div>
+            </div>
+        </div>
+        <%- include('partials/footer') %>
+    </div>
+</div>
+<%- include('partials/scripts') %>
+<script>
+    // Dashboard specific JavaScript (Status, Control, Activity, Bot Logs)
+    async function refreshStatus() {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        document.getElementById('bot-name').innerText = data.botName || '-';
+        document.getElementById('bot-version').innerText = data.version || '-';
+        document.getElementById('restart-count').innerText = data.restartCount || 0;
+        document.getElementById('bot-cpu').innerText = (data.cpu || 0).toFixed(1);
+        document.getElementById('bot-mem').innerText = ((data.memory || 0) / 1048576).toFixed(1);
+        const badge = document.getElementById('bot-status-badge');
+        const navBadge = document.getElementById('nav-status-badge');
+        if (data.online) {
+            badge.className = 'badge badge-online'; badge.innerText = 'ONLINE';
+            if (navBadge) { navBadge.className = 'badge badge-online'; navBadge.innerText = 'ONLINE'; }
+        } else {
+            badge.className = 'badge badge-offline'; badge.innerText = data.status === 'stopped' ? 'STOPPED' : 'OFFLINE';
+            if (navBadge) { navBadge.className = 'badge badge-offline'; navBadge.innerText = 'OFFLINE'; }
+        }
+        document.getElementById('bot-uptime').innerText = data.uptime || '0s';
+    }
+
+    async function startBot() { if(confirm('Start bot?')) { await fetch('/api/start', {method:'POST'}); refreshStatus(); loadActivityLog(); } }
+    async function stopBot() { if(confirm('Stop bot?')) { await fetch('/api/stop', {method:'POST'}); refreshStatus(); loadActivityLog(); } }
+    async function restartBot() { if(confirm('Restart bot?')) { await fetch('/api/restart', {method:'POST'}); setTimeout(refreshStatus, 3000); loadActivityLog(); } }
+
+    async function loadActivityLog() {
+        const res = await fetch('/api/activity?limit=50');
+        const logs = await res.json();
+        const tbody = document.getElementById('activity-log-body');
+        tbody.innerHTML = '';
+        logs.forEach(l => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${new Date(l.created_at).toLocaleString()}</td><td>${l.user_name}</td><td>${l.action}</td><td>${l.details||''}</td><td>${l.ip||''}</td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    async function loadBotLogs() {
+        const pre = document.getElementById('bot-logs-content');
+        pre.innerText = 'Loading...';
+        const res = await fetch('/api/bot-logs?lines=200');
+        const data = await res.json();
+        pre.innerText = data.logs || data.error || 'No logs';
+    }
+
+    refreshStatus();
+    loadActivityLog();
+    loadBotLogs();
+    setInterval(refreshStatus, 10000);
+</script>
+</body>
+</html>

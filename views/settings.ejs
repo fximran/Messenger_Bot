@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Settings - Bot Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background: #f8f9fa; }
+        .card { margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        textarea { font-family: 'Courier New', monospace; font-size: 13px; }
+    </style>
+</head>
+<body>
+<div class="d-flex">
+    <%- include('partials/sidebar') %>
+    <div class="flex-grow-1">
+        <%- include('partials/header') %>
+        <div class="container-fluid px-4 py-3">
+            <!-- Quick Bot Settings -->
+            <div class="card">
+                <div class="card-header bg-primary text-white"><i class="fas fa-sliders-h me-2"></i>Quick Bot Settings</div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label>🤖 Bot Name</label>
+                            <input type="text" id="quick-botname" class="form-control" placeholder="e.g., Jarvis">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>🔧 Command Prefix</label>
+                            <input type="text" id="quick-prefix" class="form-control" placeholder="e.g., /">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>🌐 Bot Language</label>
+                            <select id="quick-language" class="form-select">
+                                <option value="en">English</option>
+                                <option value="bn">বাংলা</option>
+                                <option value="hi">हिन्दी</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>👑 Admin IDs</label>
+                            <input type="text" id="quick-adminbot" class="form-control" placeholder="ID1, ID2">
+                        </div>
+                    </div>
+                    <button class="btn btn-success" onclick="saveQuickSettings()"><i class="fas fa-save"></i> Save Settings</button>
+                    <span id="quick-result" class="ms-2"></span>
+                </div>
+            </div>
+
+            <!-- Advanced JSON Editor (Collapsible) -->
+            <div class="card">
+                <div class="card-header bg-secondary text-white d-flex justify-content-between">
+                    <span><i class="fas fa-code me-2"></i>Advanced: config.json Editor</span>
+                    <button class="btn btn-sm btn-outline-light" onclick="toggleJson()"><i class="fas fa-chevron-down" id="json-icon"></i></button>
+                </div>
+                <div class="card-body" id="json-body" style="display: none;">
+                    <textarea id="config-editor" rows="10" class="form-control mb-2"></textarea>
+                    <button class="btn btn-outline-secondary" onclick="loadConfig()">Load</button>
+                    <button class="btn btn-primary" onclick="saveConfig()">Save JSON</button>
+                    <span id="config-result" class="ms-2"></span>
+                </div>
+            </div>
+
+            <!-- AppState Editor -->
+            <div class="card">
+                <div class="card-header bg-dark text-white"><i class="fas fa-key me-2"></i>appstate.json Editor</div>
+                <div class="card-body">
+                    <textarea id="appstate-editor" rows="6" class="form-control mb-2"></textarea>
+                    <button class="btn btn-outline-secondary" onclick="loadAppState()">Load</button>
+                    <button class="btn btn-primary" onclick="saveAppState()">Save</button>
+                    <span id="appstate-result" class="ms-2"></span>
+                </div>
+            </div>
+        </div>
+        <%- include('partials/footer') %>
+    </div>
+</div>
+<%- include('partials/scripts') %>
+<script>
+    async function loadConfig() {
+        const res = await fetch('/api/config');
+        const config = await res.json();
+        document.getElementById('config-editor').value = formatJson(config);
+        document.getElementById('quick-botname').value = config.BOTNAME || '';
+        document.getElementById('quick-prefix').value = config.PREFIX || '/';
+        document.getElementById('quick-language').value = config.language || 'en';
+        const admin = Array.isArray(config.ADMINBOT) ? config.ADMINBOT.join(', ') : config.ADMINBOT || '';
+        document.getElementById('quick-adminbot').value = admin;
+    }
+
+    async function saveConfig() {
+        const result = document.getElementById('config-result');
+        try {
+            const config = JSON.parse(document.getElementById('config-editor').value);
+            result.innerHTML = 'Saving...';
+            const res = await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(config) });
+            const data = await res.json();
+            result.innerHTML = data.success ? '<span class="text-success">Saved!</span>' : `<span class="text-danger">${data.error}</span>`;
+            if(data.success) loadConfig();
+        } catch(e) { result.innerHTML = '<span class="text-danger">Invalid JSON</span>'; }
+    }
+
+    async function saveQuickSettings() {
+        const result = document.getElementById('quick-result');
+        result.innerHTML = 'Saving...';
+        try {
+            const res = await fetch('/api/config');
+            const config = await res.json();
+            config.BOTNAME = document.getElementById('quick-botname').value.trim();
+            config.PREFIX = document.getElementById('quick-prefix').value.trim();
+            config.language = document.getElementById('quick-language').value;
+            const adminRaw = document.getElementById('quick-adminbot').value;
+            config.ADMINBOT = adminRaw.split(',').map(id => id.trim()).filter(id => id);
+            const saveRes = await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(config) });
+            if(saveRes.ok) {
+                result.innerHTML = '<span class="text-success">Saved! Restart bot to apply.</span>';
+                if(document.getElementById('json-body').style.display !== 'none') loadConfig();
+            } else {
+                const err = await saveRes.json();
+                result.innerHTML = `<span class="text-danger">${err.error}</span>`;
+            }
+        } catch(e) { result.innerHTML = '<span class="text-danger">Failed</span>'; }
+    }
+
+    function toggleJson() {
+        const body = document.getElementById('json-body');
+        const icon = document.getElementById('json-icon');
+        if(body.style.display === 'none') {
+            body.style.display = 'block';
+            icon.className = 'fas fa-chevron-up';
+            loadConfig();
+        } else {
+            body.style.display = 'none';
+            icon.className = 'fas fa-chevron-down';
+        }
+    }
+
+    async function loadAppState() {
+        const res = await fetch('/api/appstate');
+        const data = await res.json();
+        document.getElementById('appstate-editor').value = formatJson(data);
+    }
+
+    async function saveAppState() {
+        const result = document.getElementById('appstate-result');
+        try {
+            const state = JSON.parse(document.getElementById('appstate-editor').value);
+            result.innerHTML = 'Saving...';
+            const res = await fetch('/api/appstate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(state) });
+            const data = await res.json();
+            result.innerHTML = data.success ? '<span class="text-success">Saved!</span>' : `<span class="text-danger">${data.error}</span>`;
+        } catch(e) { result.innerHTML = '<span class="text-danger">Invalid JSON</span>'; }
+    }
+
+    loadConfig();
+    loadAppState();
+</script>
+</body>
+</html>

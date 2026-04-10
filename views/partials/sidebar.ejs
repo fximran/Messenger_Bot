@@ -1,0 +1,27 @@
+<div class="d-flex flex-column flex-shrink-0 p-3 bg-light" style="width: 260px; min-height: 100vh;" id="sidebarMenu">
+    <ul class="nav nav-pills flex-column mb-auto">
+        <li class="nav-item">
+            <a href="/admin/dashboard" class="nav-link <%= currentPage === 'dashboard' ? 'active' : '' %>">
+                <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="/admin/users" class="nav-link <%= currentPage === 'users' ? 'active' : '' %>">
+                <i class="fas fa-users me-2"></i>Users
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="/admin/settings" class="nav-link <%= currentPage === 'settings' ? 'active' : '' %>">
+                <i class="fas fa-cog me-2"></i>Settings
+            </a>
+        </li>
+        <li class="nav-item">
+            <hr class="dropdown-divider">
+        </li>
+        <li class="nav-item">
+            <a href="/api/logout" class="nav-link text-danger" onclick="logout(event)">
+                <i class="fas fa-sign-out-alt me-2"></i>Logout
+            </a>
+        </li>
+    </ul>
+</div>

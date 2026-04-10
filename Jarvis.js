@@ -77,9 +77,14 @@ const BOT_DESC = pkg.description || "Islamick Chat Bot";
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Set EJS as template engine
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+
+// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
     secret: 'your-very-secret-key-change-this',
     resave: false,
@@ -97,7 +102,7 @@ function requirePermission(level) {
     return (req, res, next) => {
         if (!req.session.user) return res.redirect('/login');
         if (req.session.user.permission >= level) next();
-        else res.status(403).json({ error: 'Forbidden: insufficient permission.' });
+        else res.status(403).render('error', { message: 'Forbidden: insufficient permission.' });
     };
 }
 
@@ -174,11 +179,28 @@ app.get('/api/current-user', (req, res) => {
     else res.status(401).json({ error: 'Not logged in' });
 });
 
-// ==================== Protected Routes ====================
-app.get('/admin', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+// ==================== Admin View Routes (EJS) ====================
+app.get('/admin', requireAuth, (req, res) => res.redirect('/admin/dashboard'));
+
+app.get('/admin/dashboard', requireAuth, (req, res) => {
+    res.render('dashboard', { user: req.session.user, currentPage: 'dashboard', pkgVersion: BOT_VERSION });
+});
+
+app.get('/admin/users', requireAuth, requirePermission(2), (req, res) => {
+    res.render('users', { user: req.session.user, currentPage: 'users', pkgVersion: BOT_VERSION });
+});
+
+app.get('/admin/settings', requireAuth, requirePermission(2), (req, res) => {
+    res.render('settings', { user: req.session.user, currentPage: 'settings', pkgVersion: BOT_VERSION });
+});
+
+// Error page
+app.get('/error', (req, res) => res.render('error', { message: 'An error occurred' }));
+
+// ==================== API Routes ====================
 
 // ----- User Management -----
-app.get('/api/users', requireAuth, (req, res) => {
+app.get('/api/users', requireAuth, requirePermission(2), (req, res) => {
     db.all('SELECT id, name, email, permission, created_at, updated_at FROM users ORDER BY id', (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
@@ -286,35 +308,35 @@ app.post('/api/restart', requireAuth, (req, res) => {
 });
 
 // ----- Config & AppState Editors -----
-app.get('/api/config', requireAuth, (req, res) => {
-    const p = path.join(__dirname, "config.json");
+app.get('/api/config', requireAuth, requirePermission(2), (req, res) => {
+    const configPath = path.join(__dirname, "config.json");
     try {
-        if (!fs.existsSync(p)) return res.status(404).json({ error: "config.json not found." });
-        res.json(JSON.parse(fs.readFileSync(p, "utf8")));
+        if (!fs.existsSync(configPath)) return res.status(404).json({ error: "config.json not found." });
+        res.json(JSON.parse(fs.readFileSync(configPath, "utf8")));
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/config', requireAuth, (req, res) => {
-    const p = path.join(__dirname, "config.json");
+app.post('/api/config', requireAuth, requirePermission(2), (req, res) => {
+    const configPath = path.join(__dirname, "config.json");
     try {
-        fs.writeFileSync(p, JSON.stringify(req.body, null, 2), "utf8");
+        fs.writeFileSync(configPath, JSON.stringify(req.body, null, 2), "utf8");
         logActivity(req.session.user.id, req.session.user.name, 'CONFIG_EDIT', 'Updated config.json', req);
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/appstate', requireAuth, (req, res) => {
-    const p = path.join(__dirname, "appstate.json");
+    const appstatePath = path.join(__dirname, "appstate.json");
     try {
-        if (!fs.existsSync(p)) return res.json([]);
-        res.json(JSON.parse(fs.readFileSync(p, "utf8")));
+        if (!fs.existsSync(appstatePath)) return res.json([]);
+        res.json(JSON.parse(fs.readFileSync(appstatePath, "utf8")));
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/appstate', requireAuth, (req, res) => {
-    const p = path.join(__dirname, "appstate.json");
+    const appstatePath = path.join(__dirname, "appstate.json");
     try {
-        fs.writeFileSync(p, JSON.stringify(req.body, null, 2), "utf8");
+        fs.writeFileSync(appstatePath, JSON.stringify(req.body, null, 2), "utf8");
         logActivity(req.session.user.id, req.session.user.name, 'APPSTATE_EDIT', 'Updated appstate.json', req);
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
