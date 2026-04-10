@@ -18,7 +18,7 @@ const BOT_DESC = pkg.description || "Islamick Chat Bot";
 
 // ==================== Express Server ====================
 const app = express();
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
