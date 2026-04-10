@@ -51,6 +51,7 @@
                         <button class="btn btn-success" onclick="startBot()"><i class="fas fa-play"></i> Start</button>
                         <button class="btn btn-warning text-white" onclick="stopBot()"><i class="fas fa-stop"></i> Stop</button>
                         <button class="btn btn-danger" onclick="restartBot()"><i class="fas fa-redo-alt"></i> Restart</button>
+                        <button class="btn btn-secondary" onclick="restartPanel()"><i class="fas fa-server"></i> Restart Panel</button>
                     </div>
                     <div id="control-result" class="mt-2 text-muted"></div>
                 </div>
@@ -111,9 +112,51 @@
         document.getElementById('bot-uptime').innerText = data.uptime || '0s';
     }
 
-    async function startBot() { if(confirm('Start bot?')) { await fetch('/api/start', {method:'POST'}); refreshStatus(); loadActivityLog(); } }
-    async function stopBot() { if(confirm('Stop bot?')) { await fetch('/api/stop', {method:'POST'}); refreshStatus(); loadActivityLog(); } }
-    async function restartBot() { if(confirm('Restart bot?')) { await fetch('/api/restart', {method:'POST'}); setTimeout(refreshStatus, 3000); loadActivityLog(); } }
+    async function startBot() { 
+        if(!confirm('Start the bot?')) return;
+        await fetch('/api/start', {method:'POST'}); 
+        refreshStatus(); 
+        loadActivityLog(); 
+    }
+    
+    async function stopBot() { 
+        if(!confirm('Stop the bot?')) return;
+        await fetch('/api/stop', {method:'POST'}); 
+        refreshStatus(); 
+        loadActivityLog(); 
+    }
+    
+    async function restartBot() { 
+        if(!confirm('Restart the bot?')) return;
+        await fetch('/api/restart', {method:'POST'}); 
+        setTimeout(refreshStatus, 3000); 
+        loadActivityLog(); 
+    }
+
+    async function restartPanel() {
+        if (!confirm('Are you sure you want to restart the web panel? The page will become temporarily unavailable.')) {
+            return;
+        }
+        const resultEl = document.getElementById('control-result');
+        resultEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Restarting panel... Please wait.';
+        try {
+            const res = await fetch('/api/restart-panel', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                resultEl.innerHTML = '<span class="text-info">Panel is restarting. This page will reload automatically in 10 seconds...</span>';
+                setTimeout(() => {
+                    window.location.reload();
+                }, 10000);
+            } else {
+                resultEl.innerHTML = `<span class="text-danger">Error: ${data.error}</span>`;
+            }
+        } catch (error) {
+            resultEl.innerHTML = '<span class="text-warning">Panel is restarting. Please refresh the page after a few seconds.</span>';
+            setTimeout(() => {
+                window.location.reload();
+            }, 8000);
+        }
+    }
 
     async function loadActivityLog() {
         const res = await fetch('/api/activity?limit=50');
@@ -130,15 +173,11 @@
     async function loadBotLogs() {
         const pre = document.getElementById('bot-logs-content');
         pre.innerText = 'Loading...';
-        try {
-            const res = await fetch('/api/bot-logs?lines=200');
-            const data = await res.json();
-            pre.innerText = data.logs || data.error || 'No logs';
-            // Auto-scroll to bottom after loading logs
-            pre.scrollTop = pre.scrollHeight;
-        } catch(e) {
-            pre.innerText = 'Failed to load logs';
-        }
+        const res = await fetch('/api/bot-logs?lines=200');
+        const data = await res.json();
+        pre.innerText = data.logs || data.error || 'No logs';
+        // Auto-scroll to bottom
+        pre.scrollTop = pre.scrollHeight;
     }
 
     refreshStatus();

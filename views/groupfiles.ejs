@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group File List - Bot Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background: #f8f9fa; }
+        .card { margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+<div class="d-flex flex-column flex-md-row">
+    <%- include('partials/sidebar', { currentPage: 'groupfiles' }) %>
+    <div class="flex-grow-1">
+        <%- include('partials/header') %>
+        <div class="container-fluid px-3 py-3">
+            <!-- Upload Card -->
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <i class="fas fa-cloud-upload-alt me-2"></i>Upload New File
+                </div>
+                <div class="card-body">
+                    <form id="upload-form" enctype="multipart/form-data">
+                        <div class="input-group">
+                            <input type="file" class="form-control" id="file-input" accept=".json" required>
+                            <button class="btn btn-primary" type="submit"><i class="fas fa-upload"></i> Upload</button>
+                        </div>
+                    </form>
+                    <div id="upload-result" class="mt-2"></div>
+                </div>
+            </div>
+
+            <!-- File List Card -->
+            <div class="card">
+                <div class="card-header bg-primary text-white d-flex justify-content-between">
+                    <span><i class="fas fa-file-export me-2"></i>Exported Files (box_exports)</span>
+                    <button class="btn btn-sm btn-light" onclick="loadFiles()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                </div>
+                <div class="card-body table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Group Name</th>
+                                <th>Filename</th>
+                                <th>Members</th>
+                                <th>Size</th>
+                                <th>Modified</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="file-list-body">
+                            <tr><td colspan="7" class="text-center">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <%- include('partials/footer') %>
+    </div>
+</div>
+<%- include('partials/scripts') %>
+<script>
+    async function loadFiles() {
+        const tbody = document.getElementById('file-list-body');
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center">Loading...</td></tr>';
+        try {
+            const res = await fetch('/api/groupfiles');
+            const files = await res.json();
+            if (files.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">No files found. Upload a JSON file to get started.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = '';
+            files.forEach((f, index) => {
+                const row = document.createElement('tr');
+                const sizeKB = (f.size / 1024).toFixed(1);
+                const modified = new Date(f.modified).toLocaleString();
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${f.groupName || 'Unknown'}</td>
+                    <td>${f.filename}</td>
+                    <td>${f.totalMembers}</td>
+                    <td>${sizeKB} KB</td>
+                    <td>${modified}</td>
+                    <td>
+                        <a href="/api/groupfiles/download/${encodeURIComponent(f.filename)}" class="btn btn-sm btn-outline-success" title="Download">
+                            <i class="fas fa-download"></i>
+                        </a>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteFile('${f.filename}')" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        } catch (e) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Failed to load files</td></tr>';
+        }
+    }
+
+    async function deleteFile(filename) {
+        if (!confirm(`Are you sure you want to delete "${filename}"?`)) return;
+        try {
+            const res = await fetch(`/api/groupfiles/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+            if (res.ok) {
+                loadFiles();
+            } else {
+                alert('Failed to delete file');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    document.getElementById('upload-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fileInput = document.getElementById('file-input');
+        const resultDiv = document.getElementById('upload-result');
+        if (!fileInput.files[0]) return;
+        
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        
+        resultDiv.innerHTML = '<span class="text-info"><i class="fas fa-spinner fa-spin"></i> Uploading...</span>';
+        try {
+            const res = await fetch('/api/groupfiles/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (data.success) {
+                resultDiv.innerHTML = '<span class="text-success"><i class="fas fa-check-circle"></i> Uploaded successfully!</span>';
+                fileInput.value = '';
+                loadFiles();
+            } else {
+                resultDiv.innerHTML = `<span class="text-danger">Error: ${data.error}</span>`;
+            }
+        } catch (err) {
+            resultDiv.innerHTML = `<span class="text-danger">Upload failed: ${err.message}</span>`;
+        }
+    });
+
+    loadFiles();
+</script>
+</body>
+</html>

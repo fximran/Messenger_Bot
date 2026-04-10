@@ -8,6 +8,7 @@ const session = require('express-session');
 const bcrypt = require('bcrypt');
 const sqlite3 = require('sqlite3').verbose();
 const cron = require('node-cron');
+const multer = require('multer');
 
 // ==================== Database Setup ====================
 const db = new sqlite3.Database('./database.db');
@@ -185,6 +186,9 @@ app.get('/admin/users', requireAuth, requirePermission(2), (req, res) => {
 app.get('/admin/settings', requireAuth, requirePermission(2), (req, res) => {
     res.render('settings', { user: req.session.user, currentPage: 'settings', pkgVersion: BOT_VERSION });
 });
+app.get('/admin/groupfiles', requireAuth, requirePermission(2), (req, res) => {
+    res.render('groupfiles', { user: req.session.user, currentPage: 'groupfiles', pkgVersion: BOT_VERSION });
+});
 
 // ----- User Management APIs -----
 app.get('/api/users', requireAuth, requirePermission(2), (req, res) => {
@@ -260,13 +264,12 @@ app.get('/api/bot-logs', requireAuth, requirePermission(2), (req, res) => {
     });
 });
 
-// ----- Bot Status (Reads fresh config every time) -----
+// ----- Bot Status -----
 app.get('/api/status', requireAuth, (req, res) => {
     getPM2Status((pm2Status) => {
         const config = readConfig();
         let botId = null;
         if (Array.isArray(config.NDH) && config.NDH.length > 0) botId = config.NDH[0];
-        // Explicitly read DEBUG_MODE from config; if missing, default to false
         const debugMode = typeof config.DEBUG_MODE === 'boolean' ? config.DEBUG_MODE : false;
         res.json({
             botName: config.BOTNAME || "Unnamed Bot",
@@ -308,7 +311,25 @@ app.post('/api/restart', requireAuth, (req, res) => {
     });
 });
 
-// ----- Config API -----
+// POST /api/restart-panel - Restart the web panel itself
+app.post('/api/restart-panel', requireAuth, requirePermission(2), (req, res) => {
+    // Log the action before restarting
+    logActivity(req.session.user.id, req.session.user.name, 'PANEL_RESTART', 'Restarting messenger-panel', req);
+    
+    // Send response immediately
+    res.json({ success: true, message: 'Panel restart initiated.' });
+    
+    // Execute restart after a short delay to allow response to be sent
+    setTimeout(() => {
+        exec(`pm2 restart messenger-panel`, (error, stdout, stderr) => {
+            if (error) {
+                console.error('Panel restart error:', error);
+            }
+        });
+    }, 500);
+});
+
+// ----- Config / AppState APIs -----
 app.get('/api/config', requireAuth, requirePermission(2), (req, res) => {
     const configPath = path.join(__dirname, "config.json");
     try {
@@ -316,24 +337,18 @@ app.get('/api/config', requireAuth, requirePermission(2), (req, res) => {
         res.json(JSON.parse(fs.readFileSync(configPath, "utf8")));
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
-
 app.post('/api/config', requireAuth, requirePermission(2), (req, res) => {
     const configPath = path.join(__dirname, "config.json");
     try {
         const newConfig = req.body;
         fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2), "utf8");
-
-        // Sync global language and debug mode for bot process
         if (!global.config) global.config = {};
         if (typeof newConfig.language !== 'undefined') global.config.language = newConfig.language;
         if (typeof newConfig.DEBUG_MODE !== 'undefined') global.debugMode = newConfig.DEBUG_MODE;
-
         logActivity(req.session.user.id, req.session.user.name, 'CONFIG_EDIT', 'Updated config.json', req);
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
-
-// ----- AppState API -----
 app.get('/api/appstate', requireAuth, (req, res) => {
     const appstatePath = path.join(__dirname, "appstate.json");
     try {
@@ -348,6 +363,94 @@ app.post('/api/appstate', requireAuth, (req, res) => {
         logActivity(req.session.user.id, req.session.user.name, 'APPSTATE_EDIT', 'Updated appstate.json', req);
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ----- Group Files Management (box_exports) -----
+const boxExportPath = path.join(__dirname, "cache", "box_exports");
+
+app.get('/api/groupfiles', requireAuth, requirePermission(2), (req, res) => {
+    try {
+        if (!fs.existsSync(boxExportPath)) {
+            return res.json([]);
+        }
+        const files = fs.readdirSync(boxExportPath)
+            .filter(f => f.endsWith('.json'))
+            .map(f => {
+                const filePath = path.join(boxExportPath, f);
+                const stats = fs.statSync(filePath);
+                let groupName = '';
+                let totalMembers = 0;
+                try {
+                    const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                    groupName = content.groupName || 'Unknown';
+                    totalMembers = content.totalMembers || 0;
+                } catch (e) {}
+                return {
+                    filename: f,
+                    groupName: groupName,
+                    totalMembers: totalMembers,
+                    size: stats.size,
+                    modified: stats.mtime
+                };
+            });
+        res.json(files);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/groupfiles/download/:filename', requireAuth, requirePermission(2), (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.join(boxExportPath, filename);
+    try {
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'File not found' });
+        }
+        res.download(filePath, filename);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+const upload = multer({ 
+    dest: boxExportPath,
+    fileFilter: (req, file, cb) => {
+        if (file.originalname.endsWith('.json')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only JSON files are allowed'));
+        }
+    }
+});
+
+app.post('/api/groupfiles/upload', requireAuth, requirePermission(2), upload.single('file'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+        const originalName = req.file.originalname;
+        const newPath = path.join(boxExportPath, originalName);
+        fs.renameSync(req.file.path, newPath);
+        logActivity(req.session.user.id, req.session.user.name, 'UPLOAD_GROUPFILE', `Uploaded ${originalName}`, req);
+        res.json({ success: true, filename: originalName });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/groupfiles/:filename', requireAuth, requirePermission(2), (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.join(boxExportPath, filename);
+    try {
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'File not found' });
+        }
+        fs.unlinkSync(filePath);
+        logActivity(req.session.user.id, req.session.user.name, 'DELETE_GROUPFILE', `Deleted ${filename}`, req);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // ==================== Start Server ====================
