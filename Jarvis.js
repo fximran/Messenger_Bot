@@ -13,7 +13,6 @@ const cron = require('node-cron');
 const db = new sqlite3.Database('./database.db');
 
 db.serialize(() => {
-    // Users table
     db.run(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -24,7 +23,6 @@ db.serialize(() => {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    // Activity logs table
     db.run(`CREATE TABLE IF NOT EXISTS activity_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -36,7 +34,6 @@ db.serialize(() => {
         FOREIGN KEY(user_id) REFERENCES users(id)
     )`);
 
-    // Default owner user
     db.get("SELECT id FROM users WHERE email = 'owner@example.com'", async (err, row) => {
         if (!row) {
             const hashedPassword = await bcrypt.hash('owner123', 10);
@@ -48,17 +45,13 @@ db.serialize(() => {
     });
 });
 
-// ==================== Auto-clean old activity logs ====================
 cron.schedule('0 2 * * *', () => {
     const daysToKeep = 30;
-    db.run(
-        `DELETE FROM activity_logs WHERE created_at < datetime('now', '-' || ? || ' days')`,
-        [daysToKeep],
+    db.run(`DELETE FROM activity_logs WHERE created_at < datetime('now', '-' || ? || ' days')`, [daysToKeep],
         function(err) {
             if (err) console.error('Auto-clean error:', err);
             else console.log(`Auto-cleaned ${this.changes} old activity logs.`);
-        }
-    );
+        });
 });
 console.log('Auto-clean scheduled: daily at 2:00 AM, keeping 30 days of logs.');
 
@@ -71,7 +64,6 @@ try {
 }
 const BOT_NAME = pkg.name || "Islamick Bot";
 const BOT_VERSION = pkg.version || "5.0.0";
-const BOT_DESC = pkg.description || "Islamick Chat Bot";
 
 // ==================== Express Server ====================
 const app = express();
@@ -90,7 +82,6 @@ app.use(session({
     cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// ==================== Helper Functions ====================
 function requireAuth(req, res, next) {
     if (req.session.user) next();
     else res.redirect('/login');
@@ -106,14 +97,11 @@ function requirePermission(level) {
 
 function logActivity(userId, userName, action, details = '', req = null) {
     const ip = req ? (req.headers['x-forwarded-for'] || req.connection.remoteAddress) : '';
-    db.run(
-        'INSERT INTO activity_logs (user_id, user_name, action, details, ip) VALUES (?, ?, ?, ?, ?)',
+    db.run('INSERT INTO activity_logs (user_id, user_name, action, details, ip) VALUES (?, ?, ?, ?, ?)',
         [userId, userName, action, details, ip],
-        (err) => { if (err) console.error('Activity log error:', err); }
-    );
+        (err) => { if (err) console.error('Activity log error:', err); });
 }
 
-// ==================== PM2 Process Name ====================
 const PM2_PROCESS_NAME = "messenger-bot";
 
 function getPM2Status(callback) {
@@ -149,7 +137,18 @@ function getPM2Status(callback) {
     });
 }
 
-// ==================== Public Routes ====================
+// Helper to read config
+function readConfig() {
+    const configPath = path.join(__dirname, "config.json");
+    try {
+        if (fs.existsSync(configPath)) {
+            return JSON.parse(fs.readFileSync(configPath, "utf8"));
+        }
+    } catch (e) {}
+    return {};
+}
+
+// ==================== Routes ====================
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/', (req, res) => res.redirect('/login'));
 
@@ -177,33 +176,24 @@ app.get('/api/current-user', (req, res) => {
     else res.status(401).json({ error: 'Not logged in' });
 });
 
-// ==================== Admin View Routes (EJS) ====================
 app.get('/admin', requireAuth, (req, res) => res.redirect('/admin/dashboard'));
-
 app.get('/admin/dashboard', requireAuth, (req, res) => {
     res.render('dashboard', { user: req.session.user, currentPage: 'dashboard', pkgVersion: BOT_VERSION });
 });
-
 app.get('/admin/users', requireAuth, requirePermission(2), (req, res) => {
     res.render('users', { user: req.session.user, currentPage: 'users', pkgVersion: BOT_VERSION });
 });
-
 app.get('/admin/settings', requireAuth, requirePermission(2), (req, res) => {
     res.render('settings', { user: req.session.user, currentPage: 'settings', pkgVersion: BOT_VERSION });
 });
 
-app.get('/error', (req, res) => res.render('error', { message: 'An error occurred' }));
-
-// ==================== API Routes ====================
-
-// ----- User Management -----
+// ----- User Management APIs -----
 app.get('/api/users', requireAuth, requirePermission(2), (req, res) => {
     db.all('SELECT id, name, email, permission, created_at, updated_at FROM users ORDER BY id', (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
 });
-
 app.post('/api/users', requireAuth, requirePermission(2), async (req, res) => {
     const { name, email, password, permission } = req.body;
     if (!name || !email || !password) return res.status(400).json({ error: 'Name, email and password required.' });
@@ -219,11 +209,8 @@ app.post('/api/users', requireAuth, requirePermission(2), async (req, res) => {
                 logActivity(req.session.user.id, req.session.user.name, 'USER_CREATE', `Created user ${email}`, req);
                 res.json({ success: true, id: this.lastID });
             });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
-
 app.put('/api/users/:id', requireAuth, requirePermission(2), async (req, res) => {
     const { id } = req.params;
     const { name, email, password, permission } = req.body;
@@ -246,7 +233,6 @@ app.put('/api/users/:id', requireAuth, requirePermission(2), async (req, res) =>
         res.json({ success: true });
     });
 });
-
 app.delete('/api/users/:id', requireAuth, requirePermission(3), (req, res) => {
     const { id } = req.params;
     db.run('DELETE FROM users WHERE id = ?', id, function(err) {
@@ -266,7 +252,7 @@ app.get('/api/activity', requireAuth, (req, res) => {
     });
 });
 
-// ----- Bot Logs (PM2) -----
+// ----- Bot Logs -----
 app.get('/api/bot-logs', requireAuth, requirePermission(2), (req, res) => {
     const lines = parseInt(req.query.lines) || 200;
     exec(`pm2 logs ${PM2_PROCESS_NAME} --lines ${lines} --nostream`, (error, stdout, stderr) => {
@@ -275,50 +261,18 @@ app.get('/api/bot-logs', requireAuth, requirePermission(2), (req, res) => {
     });
 });
 
-// ----- Debug Mode Control (Global) -----
-if (typeof global.debugMode === "undefined") {
-    global.debugMode = false;
-}
-
-app.get('/api/debug', requireAuth, (req, res) => {
-    res.json({ debugMode: global.debugMode });
-});
-
-app.post('/api/debug', requireAuth, requirePermission(2), (req, res) => {
-    const { debugMode } = req.body;
-    if (typeof debugMode !== "boolean") {
-        return res.status(400).json({ error: "debugMode must be a boolean." });
-    }
-    global.debugMode = debugMode;
-    logActivity(req.session.user.id, req.session.user.name, 'DEBUG_MODE', `Set debug mode to ${debugMode ? 'ON' : 'OFF'}`, req);
-    res.json({ success: true, debugMode: global.debugMode });
-});
-
-// ----- Bot Status & Control -----
+// ----- Bot Status -----
 app.get('/api/status', requireAuth, (req, res) => {
     getPM2Status((pm2Status) => {
-        const configPath = path.join(__dirname, "config.json");
-        let config = {};
-        try {
-            if (fs.existsSync(configPath)) {
-                config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-            }
-        } catch (e) { console.error("Config read error:", e); }
-
-        const currentLanguage = global.config?.language || config.language || "en";
-        const debugMode = typeof global.debugMode !== "undefined" ? global.debugMode : false;
-
+        const config = readConfig();
         let botId = null;
-        if (Array.isArray(config.NDH) && config.NDH.length > 0) {
-            botId = config.NDH[0];
-        }
-
+        if (Array.isArray(config.NDH) && config.NDH.length > 0) botId = config.NDH[0];
         res.json({
             botName: config.BOTNAME || "Unnamed Bot",
             botId: botId || 'N/A',
             botPrefix: config.PREFIX || "/",
-            botLanguage: currentLanguage,
-            debugMode: debugMode,
+            botLanguage: config.language || 'en',
+            debugMode: config.DEBUG_MODE || false,
             version: BOT_VERSION,
             online: pm2Status.online,
             status: pm2Status.status,
@@ -332,30 +286,28 @@ app.get('/api/status', requireAuth, (req, res) => {
 });
 
 app.post('/api/start', requireAuth, (req, res) => {
-    exec(`pm2 start ${PM2_PROCESS_NAME}`, (error, stdout) => {
+    exec(`pm2 start ${PM2_PROCESS_NAME}`, (error) => {
         if (error) return res.status(500).json({ error: error.message });
         logActivity(req.session.user.id, req.session.user.name, 'BOT_START', 'Started messenger-bot', req);
-        res.json({ success: true, message: 'Bot started.' });
+        res.json({ success: true });
     });
 });
-
 app.post('/api/stop', requireAuth, (req, res) => {
-    exec(`pm2 stop ${PM2_PROCESS_NAME}`, (error, stdout) => {
+    exec(`pm2 stop ${PM2_PROCESS_NAME}`, (error) => {
         if (error) return res.status(500).json({ error: error.message });
         logActivity(req.session.user.id, req.session.user.name, 'BOT_STOP', 'Stopped messenger-bot', req);
-        res.json({ success: true, message: 'Bot stopped.' });
+        res.json({ success: true });
     });
 });
-
 app.post('/api/restart', requireAuth, (req, res) => {
-    exec(`pm2 restart ${PM2_PROCESS_NAME}`, (error, stdout) => {
+    exec(`pm2 restart ${PM2_PROCESS_NAME}`, (error) => {
         if (error) return res.status(500).json({ error: error.message });
         logActivity(req.session.user.id, req.session.user.name, 'BOT_RESTART', 'Restarted messenger-bot', req);
-        res.json({ success: true, message: 'Bot restarted.' });
+        res.json({ success: true });
     });
 });
 
-// ----- Config & AppState Editors -----
+// ----- Config API (Read/Write full config) -----
 app.get('/api/config', requireAuth, requirePermission(2), (req, res) => {
     const configPath = path.join(__dirname, "config.json");
     try {
@@ -370,17 +322,17 @@ app.post('/api/config', requireAuth, requirePermission(2), (req, res) => {
         const newConfig = req.body;
         fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2), "utf8");
 
-        // Update global language if changed via config
-        if (typeof newConfig.language !== "undefined") {
-            if (!global.config) global.config = {};
-            global.config.language = newConfig.language;
-        }
+        // Sync global language if used by bot
+        if (!global.config) global.config = {};
+        if (newConfig.language) global.config.language = newConfig.language;
+        if (typeof newConfig.DEBUG_MODE !== 'undefined') global.debugMode = newConfig.DEBUG_MODE;
 
         logActivity(req.session.user.id, req.session.user.name, 'CONFIG_EDIT', 'Updated config.json', req);
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ----- AppState API -----
 app.get('/api/appstate', requireAuth, (req, res) => {
     const appstatePath = path.join(__dirname, "appstate.json");
     try {
@@ -388,7 +340,6 @@ app.get('/api/appstate', requireAuth, (req, res) => {
         res.json(JSON.parse(fs.readFileSync(appstatePath, "utf8")));
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
-
 app.post('/api/appstate', requireAuth, (req, res) => {
     const appstatePath = path.join(__dirname, "appstate.json");
     try {

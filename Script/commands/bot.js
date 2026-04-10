@@ -1,4 +1,21 @@
 const fs = require("fs-extra");
+const path = require("path");
+
+// Path to config.json (assuming bot.js is in Script/commands/)
+const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
+
+function readConfig() {
+    try {
+        if (fs.existsSync(CONFIG_PATH)) {
+            return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+        }
+    } catch (e) {}
+    return {};
+}
+
+function writeConfig(config) {
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
+}
 
 module.exports.config = {
     name: "bot",
@@ -15,11 +32,19 @@ module.exports.run = async function({ api, event, args }) {
     const { threadID, messageID, senderID } = event;
     const isBotAdmin = global.config.ADMINBOT.includes(senderID);
     
-    // Only bot admins can use this command
     if (!isBotAdmin) {
         return api.sendMessage("❌ Only bot admins can use this command!", threadID, messageID);
     }
     
+    let config = readConfig();
+    // Ensure defaults
+    if (typeof config.language === 'undefined') config.language = 'en';
+    if (typeof config.DEBUG_MODE === 'undefined') config.DEBUG_MODE = false;
+    
+    // Sync global variables for immediate effect
+    global.config.language = config.language;
+    global.debugMode = config.DEBUG_MODE;
+
     // ========== CHANGE BOT LANGUAGE ==========
     if (args[0] === "language") {
         const newLang = args[1]?.toLowerCase();
@@ -30,13 +55,12 @@ module.exports.run = async function({ api, event, args }) {
         };
         
         if (!newLang || !availableLangs[newLang]) {
-            const currentLang = global.config.language || "en";
+            const currentLang = config.language;
             let langList = "";
             for (const [code, name] of Object.entries(availableLangs)) {
                 const marker = code === currentLang ? "✅ " : "   ";
                 langList += `${marker}/bot language ${code} - ${name}\n`;
             }
-            
             return api.sendMessage(
                 `📖 CHANGE BOT LANGUAGE\n━━━━━━━━━━━━━━━━━━━━\n\n` +
                 `🌐 Current Language: ${availableLangs[currentLang]} (${currentLang})\n\n` +
@@ -46,8 +70,9 @@ module.exports.run = async function({ api, event, args }) {
             );
         }
         
+        config.language = newLang;
+        writeConfig(config);
         global.config.language = newLang;
-        await fs.writeFileSync(global.client.configPath, JSON.stringify(global.config, null, 4));
         
         return api.sendMessage(
             `✅ Bot language changed to ${availableLangs[newLang]}!\n\n` +
@@ -61,14 +86,9 @@ module.exports.run = async function({ api, event, args }) {
     if (args[0] === "debug") {
         const subCommand = args[1]?.toLowerCase();
         
-        if (typeof global.debugMode === "undefined") {
-            global.debugMode = false;
-        }
-        
         if (subCommand === "status" || !subCommand) {
-            const status = global.debugMode ? "✅ ENABLED" : "❌ DISABLED";
-            const statusIcon = global.debugMode ? "🔴" : "⚫";
-            
+            const status = config.DEBUG_MODE ? "✅ ENABLED" : "❌ DISABLED";
+            const statusIcon = config.DEBUG_MODE ? "🔴" : "⚫";
             return api.sendMessage(
                 `🐛 DEBUG MODE STATUS\n━━━━━━━━━━━━━━━━━━━━\n\n` +
                 `${statusIcon} Current Status: ${status}\n\n` +
@@ -82,6 +102,8 @@ module.exports.run = async function({ api, event, args }) {
         }
         
         if (subCommand === "on") {
+            config.DEBUG_MODE = true;
+            writeConfig(config);
             global.debugMode = true;
             return api.sendMessage(
                 `✅ DEBUG MODE ENABLED\n━━━━━━━━━━━━━━━━━━━━\n\n` +
@@ -96,6 +118,8 @@ module.exports.run = async function({ api, event, args }) {
         }
         
         if (subCommand === "off") {
+            config.DEBUG_MODE = false;
+            writeConfig(config);
             global.debugMode = false;
             return api.sendMessage(
                 `✅ DEBUG MODE DISABLED\n━━━━━━━━━━━━━━━━━━━━\n\n` +
@@ -106,11 +130,7 @@ module.exports.run = async function({ api, event, args }) {
             );
         }
         
-        return api.sendMessage(
-            `❌ Invalid option!\n\n` +
-            `Use: /bot debug on/off/status`,
-            threadID, messageID
-        );
+        return api.sendMessage(`❌ Invalid option!\n\nUse: /bot debug on/off/status`, threadID, messageID);
     }
     
     // ========== BOT INFO (DEFAULT) ==========
@@ -129,8 +149,8 @@ module.exports.run = async function({ api, event, args }) {
     
     const totalCommands = global.client.commands.size;
     const botPrefix = global.config.PREFIX || "/";
-    const botLanguage = global.config.language || "en";
-    const debugStatus = global.debugMode ? "✅ ON" : "❌ OFF";
+    const botLanguage = config.language;
+    const debugStatus = config.DEBUG_MODE ? "✅ ON" : "❌ OFF";
     
     const langNames = {
         en: "English",

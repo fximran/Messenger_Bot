@@ -104,7 +104,7 @@
         try {
             const debugRes = await fetch('/api/debug');
             const debugData = await debugRes.json();
-            document.getElementById('quick-debug').value = debugData.debugMode ? 'true' : 'false';
+            document.getElementById('quick-debug').value = config.DEBUG_MODE ? 'true' : 'false';
         } catch(e) { console.error('Failed to load debug mode', e); }
 
         // ADMINBOT
@@ -152,7 +152,7 @@
             }
 
             // Save debug mode separately to global
-            const debugValue = document.getElementById('quick-debug').value === 'true';
+            config.DEBUG_MODE = document.getElementById('quick-debug').value === 'true';
             const debugRes = await fetch('/api/debug', { 
                 method:'POST', 
                 headers:{'Content-Type':'application/json'}, 
