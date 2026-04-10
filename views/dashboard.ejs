@@ -130,9 +130,15 @@
     async function loadBotLogs() {
         const pre = document.getElementById('bot-logs-content');
         pre.innerText = 'Loading...';
-        const res = await fetch('/api/bot-logs?lines=200');
-        const data = await res.json();
-        pre.innerText = data.logs || data.error || 'No logs';
+        try {
+            const res = await fetch('/api/bot-logs?lines=200');
+            const data = await res.json();
+            pre.innerText = data.logs || data.error || 'No logs';
+            // Auto-scroll to bottom after loading logs
+            pre.scrollTop = pre.scrollHeight;
+        } catch(e) {
+            pre.innerText = 'Failed to load logs';
+        }
     }
 
     refreshStatus();
