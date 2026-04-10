@@ -1,6 +1,6 @@
 # 🚀 Messenger Bot - Complete Server Setup Guide
 
-A custom-edited Facebook Messenger bot based on the CYBER-BOT-COMMUNITY source project, now with a **Web Admin Panel**.
+A custom-edited Facebook Messenger bot based on the CYBER-BOT-COMMUNITY source project, now with a **Web Admin Panel** using EJS templates.
 
 ---
 
@@ -58,13 +58,14 @@ This project is mainly intended for personal use, testing, and learning purposes
    npm install
 
 4. **IMPORTANT: Install additional required packages for the Web Panel:**
-   npm install bcrypt express-session sqlite3 node-cron
+   npm install bcrypt express-session sqlite3 node-cron ejs
 
    _Explanation of these packages:_
    - `bcrypt` : For password hashing (security)
    - `express-session` : For user login sessions
    - `sqlite3` : For storing user data and activity logs
    - `node-cron` : For auto-cleaning old logs daily
+   - `ejs` : Template engine for rendering dynamic web pages
 
 ---
 
@@ -77,10 +78,12 @@ This project is mainly intended for personal use, testing, and learning purposes
    nano config.json
 
    Modify these fields:
-   - `ADMINBOT` : Your Facebook user ID
+   - `ADMINBOT` : Your Facebook user ID(s) as an array
+   - `NDH` : Your Bot's Facebook ID (first ID in array)
    - `BOTNAME` : The name of your bot
    - `PREFIX` : Command prefix (e.g., "/")
    - `language` : "en", "bn", or "hi"
+   - `DEBUG_MODE`: true or false
 
 3. Add `appstate.json` (Facebook cookies) in the root directory.
    Without this, the bot cannot log in.
@@ -94,7 +97,7 @@ The bot includes a **web-based control panel** accessible at:
 ### 🔑 Default Login
 
 - **Email:** `owner@example.com`
-- **Password:** `owner@123`
+- **Password:** `owner123`
 
 ⚠️ **Change the default password immediately after first login!**
 (Go to Members Management -> Edit User)
@@ -102,6 +105,7 @@ The bot includes a **web-based control panel** accessible at:
 ### 📊 Panel Features
 
 - **Bot Status & Control:** Start / Stop / Restart the bot via PM2.
+- **Quick Settings:** Edit `BOTNAME`, `PREFIX`, `language`, `DEBUG_MODE`, `ADMINBOT`, `NDH`.
 - **Config Editor:** Edit `config.json` directly from your browser.
 - **AppState Editor:** Update Facebook session cookies easily.
 - **User Management:** Add / Edit / Delete panel users with permission levels (0=Member, 1=Mod, 2=Admin, 3=Owner).

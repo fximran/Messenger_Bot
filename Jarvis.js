@@ -287,10 +287,8 @@ app.get('/api/status', requireAuth, (req, res) => {
         } catch (e) { console.error("Config read error:", e); }
 
         const currentLanguage = global.config?.language || config.language || "en";
-        // Use config.DEBUG_MODE if defined, otherwise fallback to global.debugMode
         const debugMode = config.hasOwnProperty('DEBUG_MODE') ? config.DEBUG_MODE : (typeof global.debugMode !== "undefined" ? global.debugMode : false);
 
-        // Use first ID from NDH array as Bot ID
         let botId = null;
         if (Array.isArray(config.NDH) && config.NDH.length > 0) {
             botId = config.NDH[0];
@@ -346,14 +344,28 @@ app.get('/api/config', requireAuth, requirePermission(2), (req, res) => {
         res.json(JSON.parse(fs.readFileSync(configPath, "utf8")));
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
-
+// ----- Config & AppState Editors -----
 app.post('/api/config', requireAuth, requirePermission(2), (req, res) => {
     const configPath = path.join(__dirname, "config.json");
     try {
-        fs.writeFileSync(configPath, JSON.stringify(req.body, null, 2), "utf8");
+        const newConfig = req.body;
+        fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2), "utf8");
+        
+        // Update global.debugMode if present in config
+        if (typeof newConfig.DEBUG_MODE !== "undefined") {
+            global.debugMode = newConfig.DEBUG_MODE;
+        }
+        // Update global.config.language if present
+        if (typeof newConfig.language !== "undefined") {
+            if (!global.config) global.config = {};
+            global.config.language = newConfig.language;
+        }
+
         logActivity(req.session.user.id, req.session.user.name, 'CONFIG_EDIT', 'Updated config.json', req);
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        res.status(500).json({ error: e.message }); 
+    }
 });
 
 app.get('/api/appstate', requireAuth, (req, res) => {
