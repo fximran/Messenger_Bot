@@ -427,7 +427,7 @@ app.delete('/api/groupfiles/:filename', requireAuth, requirePermission(2), (req,
 });
 
 // ----- Auto Messages Management -----
-const autoMsgPath = path.join(__dirname, "cache", "automessage");
+const autoMsgPath = path.join(__dirname, "Script", "commands", "cache", "automessage");
 if (!fs.existsSync(autoMsgPath)) fs.mkdirSync(autoMsgPath, { recursive: true });
 
 app.get('/api/automessages', requireAuth, requirePermission(2), (req, res) => {
