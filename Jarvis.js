@@ -378,7 +378,9 @@ app.post('/api/appstate', requireAuth, (req, res) => {
 const boxExportPath = path.join(__dirname, "Script", "commands", "cache", "box_exports");
 if (!fs.existsSync(boxExportPath)) fs.mkdirSync(boxExportPath, { recursive: true });
 
+// ----- Group Files Management (box_exports) -----
 app.get('/api/groupfiles', requireAuth, requirePermission(2), (req, res) => {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
     try {
         const files = fs.readdirSync(boxExportPath)
             .filter(f => f.endsWith('.json'))
@@ -499,7 +501,9 @@ app.post('/api/groupfiles/upload', requireAuth, requirePermission(2), groupUploa
 const autoMsgPath = path.join(__dirname, "Script", "commands", "cache", "automessage");
 if (!fs.existsSync(autoMsgPath)) fs.mkdirSync(autoMsgPath, { recursive: true });
 
+// ----- Auto Messages Management -----
 app.get('/api/automessages', requireAuth, requirePermission(2), (req, res) => {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
     try {
         const files = fs.readdirSync(autoMsgPath)
             .filter(f => f.endsWith('.json'))
