@@ -6,6 +6,8 @@
     <title>Auto Messages - Bot Panel</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
     <style>
         body { background: #f8f9fa; }
         .card { margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
@@ -21,12 +23,12 @@
             <!-- Upload Card -->
             <div class="card">
                 <div class="card-header bg-success text-white">
-                    <i class="fas fa-cloud-upload-alt me-2"></i>Upload Auto Message File
+                    <i class="fas fa-cloud-upload-alt me-2"></i>Upload Auto Message Files (Multiple JSON allowed)
                 </div>
                 <div class="card-body">
                     <form id="upload-form" enctype="multipart/form-data">
                         <div class="input-group">
-                            <input type="file" class="form-control" id="file-input" accept=".json" required>
+                            <input type="file" class="form-control" id="file-input" accept=".json" multiple required>
                             <button class="btn btn-primary" type="submit"><i class="fas fa-upload"></i> Upload</button>
                         </div>
                         <small class="text-muted">File must be named: automessage_&lt;threadID&gt;.json</small>
@@ -35,27 +37,33 @@
                 </div>
             </div>
 
-            <!-- File List Card -->
+            <!-- File List Card with Bulk Actions -->
             <div class="card">
-                <div class="card-header bg-primary text-white d-flex justify-content-between">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <span><i class="fas fa-clock me-2"></i>Auto Message Files (cache/automessage)</span>
-                    <button class="btn btn-sm btn-light" onclick="loadFiles()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                    <div>
+                        <button class="btn btn-sm btn-success" id="bulk-download-btn" disabled onclick="bulkDownload()"><i class="fas fa-download"></i> Download Selected</button>
+                        <button class="btn btn-sm btn-danger" id="bulk-delete-btn" disabled onclick="bulkDelete()"><i class="fas fa-trash"></i> Delete Selected</button>
+                        <button class="btn btn-sm btn-light ms-2" onclick="loadFiles()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                    </div>
                 </div>
                 <div class="card-body table-responsive">
-                    <table class="table table-hover">
+                    <table id="files-table" class="table table-hover" style="width:100%">
                         <thead>
                             <tr>
+                                <th><input type="checkbox" id="select-all"></th>
                                 <th>#</th>
                                 <th>Group ID</th>
                                 <th>Filename</th>
                                 <th>Status</th>
                                 <th>Messages</th>
+                                <th>Size (KB)</th>
                                 <th>Modified</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="file-list-body">
-                            <tr><td colspan="7" class="text-center">Loading...</td></tr>
+                            <!-- DataTables will populate -->
                         </tbody>
                     </table>
                 </div>
@@ -81,58 +89,164 @@
 </div>
 
 <%- include('partials/scripts') %>
+<!-- DataTables JS -->
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
 <script>
+    let dataTable;
     let viewModal;
+    const $ = jQuery;
+    
     document.addEventListener('DOMContentLoaded', () => {
         viewModal = new bootstrap.Modal(document.getElementById('viewModal'));
-        loadFiles();
+        initDataTable();
     });
 
-    async function loadFiles() {
-        const tbody = document.getElementById('file-list-body');
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center">Loading...</td></tr>';
-        try {
-            const res = await fetch('/api/automessages');
-            const files = await res.json();
-            if (files.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center">No files found.</td></tr>';
-                return;
+    function initDataTable() {
+        if (dataTable) dataTable.destroy();
+        dataTable = $('#files-table').DataTable({
+            ajax: {
+                url: '/api/automessages',
+                dataSrc: ''
+            },
+            columns: [
+                { 
+                    data: null,
+                    orderable: false,
+                    render: function(data, type, row) {
+                        return `<input type="checkbox" class="file-checkbox" value="${row.filename}">`;
+                    }
+                },
+                { 
+                    data: null,
+                    render: function(data, type, row, meta) {
+                        return meta.row + 1;
+                    }
+                },
+                { data: 'groupId', defaultContent: 'Unknown' },
+                { data: 'filename' },
+                { 
+                    data: 'enabled',
+                    render: function(data) {
+                        return data ? '<span class="badge bg-success">Enabled</span>' : '<span class="badge bg-secondary">Disabled</span>';
+                    }
+                },
+                { data: 'messageCount', defaultContent: 0 },
+                { 
+                    data: 'size',
+                    render: function(data) {
+                        return (data / 1024).toFixed(1);
+                    }
+                },
+                { 
+                    data: 'modified',
+                    render: function(data) {
+                        return new Date(data).toLocaleString();
+                    }
+                },
+                {
+                    data: 'filename',
+                    orderable: false,
+                    render: function(data) {
+                        return `
+                            <button class="btn btn-sm btn-outline-info" onclick="viewFile('${data}')" title="View Messages"><i class="fas fa-eye"></i></button>
+                            <a href="/api/automessages/download/${encodeURIComponent(data)}" class="btn btn-sm btn-outline-success" title="Download"><i class="fas fa-download"></i></a>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteSingle('${data}')" title="Delete"><i class="fas fa-trash"></i></button>
+                        `;
+                    }
+                }
+            ],
+            order: [[6, 'desc']],
+            pageLength: 25,
+            lengthMenu: [10, 25, 50, 100],
+            language: { search: "", searchPlaceholder: "Search..." },
+            initComplete: function() {
+                $('.dataTables_filter input').addClass('form-control');
             }
-            tbody.innerHTML = '';
-            files.forEach((f, i) => {
-                const row = document.createElement('tr');
-                const modified = new Date(f.modified).toLocaleString();
-                const statusBadge = f.enabled 
-                    ? '<span class="badge bg-success">Enabled</span>' 
-                    : '<span class="badge bg-secondary">Disabled</span>';
-                row.innerHTML = `
-                    <td>${i+1}</td>
-                    <td>${f.groupId}</td>
-                    <td>${f.filename}</td>
-                    <td>${statusBadge}</td>
-                    <td>${f.messageCount}</td>
-                    <td>${modified}</td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-info" onclick="viewFile('${f.filename}')" title="View Messages"><i class="fas fa-eye"></i></button>
-                        <a href="/api/automessages/download/${encodeURIComponent(f.filename)}" class="btn btn-sm btn-outline-success" title="Download"><i class="fas fa-download"></i></a>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteFile('${f.filename}')" title="Delete"><i class="fas fa-trash"></i></button>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-        } catch (e) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Failed to load files</td></tr>';
+        });
+        updateBulkButtons();
+    }
+
+    // Checkbox handling
+    $('#select-all').on('change', function() {
+        $('.file-checkbox').prop('checked', this.checked);
+        updateBulkButtons();
+    });
+    
+    $(document).on('change', '.file-checkbox', function() {
+        updateBulkButtons();
+    });
+
+    function updateBulkButtons() {
+        const checked = $('.file-checkbox:checked').length;
+        $('#bulk-download-btn').prop('disabled', checked === 0);
+        $('#bulk-delete-btn').prop('disabled', checked === 0);
+    }
+
+    function getSelectedFiles() {
+        return $('.file-checkbox:checked').map(function() { return this.value; }).get();
+    }
+
+    async function bulkDownload() {
+        const files = getSelectedFiles();
+        if (files.length === 0) return;
+        const res = await fetch('/api/automessages/bulk-download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ files })
+        });
+        if (res.ok) {
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'automessages.zip';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        } else {
+            alert('Failed to download selected files.');
         }
     }
 
-    async function viewFile(filename) {
+    async function bulkDelete() {
+        const files = getSelectedFiles();
+        if (files.length === 0) return;
+        if (!confirm(`Are you sure you want to delete ${files.length} file(s)?`)) return;
+        const res = await fetch('/api/automessages/bulk-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ files })
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert(`Deleted ${data.deleted.length} file(s).${data.failed.length ? ` Failed: ${data.failed.length}` : ''}`);
+            dataTable.ajax.reload(null, false);
+            $('#select-all').prop('checked', false);
+            updateBulkButtons();
+        } else {
+            alert('Bulk delete failed.');
+        }
+    }
+
+    window.deleteSingle = async function(filename) {
+        if (!confirm(`Delete ${filename}?`)) return;
+        const res = await fetch(`/api/automessages/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+        if (res.ok) {
+            dataTable.ajax.reload(null, false);
+            updateBulkButtons();
+        } else {
+            alert('Delete failed');
+        }
+    }
+
+    window.viewFile = async function(filename) {
         document.getElementById('modal-group-id').innerText = filename.replace('automessage_', '').replace('.json', '');
         document.getElementById('modal-content').innerText = 'Loading...';
         viewModal.show();
         try {
             const res = await fetch(`/api/automessages/view/${encodeURIComponent(filename)}`);
             const data = await res.json();
-            // Format messages nicely
             let output = `Enabled: ${data.enabled}\n`;
             output += `Default Interval: ${data.defaultInterval} minutes\n`;
             output += `Total Messages: ${data.messages?.length || 0}\n\n`;
@@ -149,32 +263,30 @@
         }
     }
 
-    async function deleteFile(filename) {
-        if (!confirm(`Delete ${filename}?`)) return;
-        try {
-            const res = await fetch(`/api/automessages/${encodeURIComponent(filename)}`, { method: 'DELETE' });
-            if (res.ok) loadFiles();
-            else alert('Delete failed');
-        } catch (e) {
-            alert('Error: ' + e.message);
-        }
+    async function loadFiles() {
+        dataTable.ajax.reload(null, false);
     }
 
+    // Upload form
     document.getElementById('upload-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const fileInput = document.getElementById('file-input');
         const resultDiv = document.getElementById('upload-result');
-        if (!fileInput.files[0]) return;
+        if (!fileInput.files.length) return;
         const formData = new FormData();
-        formData.append('file', fileInput.files[0]);
+        for (const file of fileInput.files) {
+            formData.append('files', file);
+        }
         resultDiv.innerHTML = '<span class="text-info"><i class="fas fa-spinner fa-spin"></i> Uploading...</span>';
         try {
             const res = await fetch('/api/automessages/upload', { method: 'POST', body: formData });
             const data = await res.json();
             if (data.success) {
-                resultDiv.innerHTML = '<span class="text-success">Uploaded!</span>';
+                let msg = `Uploaded ${data.uploaded.length} file(s).`;
+                if (data.failed.length) msg += ` Failed: ${data.failed.length}`;
+                resultDiv.innerHTML = `<span class="text-success">${msg}</span>`;
                 fileInput.value = '';
-                loadFiles();
+                dataTable.ajax.reload(null, false);
             } else {
                 resultDiv.innerHTML = `<span class="text-danger">${data.error}</span>`;
             }

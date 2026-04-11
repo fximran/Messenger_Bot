@@ -6,6 +6,8 @@
     <title>Group File List - Bot Panel</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
     <style>
         body { background: #f8f9fa; }
         .card { margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
@@ -20,40 +22,46 @@
             <!-- Upload Card -->
             <div class="card">
                 <div class="card-header bg-success text-white">
-                    <i class="fas fa-cloud-upload-alt me-2"></i>Upload New File
+                    <i class="fas fa-cloud-upload-alt me-2"></i>Upload Files (Multiple JSON allowed)
                 </div>
                 <div class="card-body">
                     <form id="upload-form" enctype="multipart/form-data">
                         <div class="input-group">
-                            <input type="file" class="form-control" id="file-input" accept=".json" required>
+                            <input type="file" class="form-control" id="file-input" accept=".json" multiple required>
                             <button class="btn btn-primary" type="submit"><i class="fas fa-upload"></i> Upload</button>
                         </div>
+                        <small class="text-muted">You can select multiple JSON files. Only .json files are accepted.</small>
                     </form>
                     <div id="upload-result" class="mt-2"></div>
                 </div>
             </div>
 
-            <!-- File List Card -->
+            <!-- File List Card with Bulk Actions -->
             <div class="card">
-                <div class="card-header bg-primary text-white d-flex justify-content-between">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <span><i class="fas fa-file-export me-2"></i>Exported Files (box_exports)</span>
-                    <button class="btn btn-sm btn-light" onclick="loadFiles()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                    <div>
+                        <button class="btn btn-sm btn-success" id="bulk-download-btn" disabled onclick="bulkDownload()"><i class="fas fa-download"></i> Download Selected</button>
+                        <button class="btn btn-sm btn-danger" id="bulk-delete-btn" disabled onclick="bulkDelete()"><i class="fas fa-trash"></i> Delete Selected</button>
+                        <button class="btn btn-sm btn-light ms-2" onclick="loadFiles()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                    </div>
                 </div>
                 <div class="card-body table-responsive">
-                    <table class="table table-hover">
+                    <table id="files-table" class="table table-hover" style="width:100%">
                         <thead>
                             <tr>
+                                <th><input type="checkbox" id="select-all"></th>
                                 <th>#</th>
                                 <th>Group Name</th>
                                 <th>Filename</th>
                                 <th>Members</th>
-                                <th>Size</th>
+                                <th>Size (KB)</th>
                                 <th>Modified</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="file-list-body">
-                            <tr><td colspan="7" class="text-center">Loading...</td></tr>
+                            <!-- DataTables will populate -->
                         </tbody>
                     </table>
                 </div>
@@ -62,89 +70,185 @@
         <%- include('partials/footer') %>
     </div>
 </div>
+
 <%- include('partials/scripts') %>
+<!-- DataTables JS -->
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
 <script>
+    let dataTable;
+    const $ = jQuery; // Ensure jQuery is available (partials/scripts might not have it, but Bootstrap bundle does)
+    
+    // Initialize DataTable
+    function initDataTable() {
+        if (dataTable) dataTable.destroy();
+        dataTable = $('#files-table').DataTable({
+            ajax: {
+                url: '/api/groupfiles',
+                dataSrc: ''
+            },
+            columns: [
+                { 
+                    data: null,
+                    orderable: false,
+                    render: function(data, type, row) {
+                        return `<input type="checkbox" class="file-checkbox" value="${row.filename}">`;
+                    }
+                },
+                { 
+                    data: null,
+                    render: function(data, type, row, meta) {
+                        return meta.row + 1;
+                    }
+                },
+                { data: 'groupName', defaultContent: 'Unknown' },
+                { data: 'filename' },
+                { data: 'totalMembers', defaultContent: 0 },
+                { 
+                    data: 'size',
+                    render: function(data) {
+                        return (data / 1024).toFixed(1);
+                    }
+                },
+                { 
+                    data: 'modified',
+                    render: function(data) {
+                        return new Date(data).toLocaleString();
+                    }
+                },
+                {
+                    data: 'filename',
+                    orderable: false,
+                    render: function(data) {
+                        return `
+                            <a href="/api/groupfiles/download/${encodeURIComponent(data)}" class="btn btn-sm btn-outline-success" title="Download"><i class="fas fa-download"></i></a>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteSingle('${data}')" title="Delete"><i class="fas fa-trash"></i></button>
+                        `;
+                    }
+                }
+            ],
+            order: [[5, 'desc']],
+            pageLength: 25,
+            lengthMenu: [10, 25, 50, 100],
+            language: { search: "", searchPlaceholder: "Search..." },
+            initComplete: function() {
+                // Style the search box
+                $('.dataTables_filter input').addClass('form-control');
+            }
+        });
+        updateBulkButtons();
+    }
+
+    // Handle select all checkbox
+    $('#select-all').on('change', function() {
+        $('.file-checkbox').prop('checked', this.checked);
+        updateBulkButtons();
+    });
+    
+    $(document).on('change', '.file-checkbox', function() {
+        updateBulkButtons();
+    });
+
+    function updateBulkButtons() {
+        const checked = $('.file-checkbox:checked').length;
+        $('#bulk-download-btn').prop('disabled', checked === 0);
+        $('#bulk-delete-btn').prop('disabled', checked === 0);
+    }
+
+    function getSelectedFiles() {
+        return $('.file-checkbox:checked').map(function() { return this.value; }).get();
+    }
+
+    async function bulkDownload() {
+        const files = getSelectedFiles();
+        if (files.length === 0) return;
+        // For bulk download, we can either redirect to a zip endpoint or use a POST request that triggers download
+        const res = await fetch('/api/groupfiles/bulk-download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ files })
+        });
+        if (res.ok) {
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'groupfiles.zip';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        } else {
+            alert('Failed to download selected files.');
+        }
+    }
+
+    async function bulkDelete() {
+        const files = getSelectedFiles();
+        if (files.length === 0) return;
+        if (!confirm(`Are you sure you want to delete ${files.length} file(s)?`)) return;
+        const res = await fetch('/api/groupfiles/bulk-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ files })
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert(`Deleted ${data.deleted.length} file(s).${data.failed.length ? ` Failed: ${data.failed.length}` : ''}`);
+            dataTable.ajax.reload(null, false);
+            $('#select-all').prop('checked', false);
+            updateBulkButtons();
+        } else {
+            alert('Bulk delete failed.');
+        }
+    }
+
+    window.deleteSingle = async function(filename) {
+        if (!confirm(`Delete ${filename}?`)) return;
+        const res = await fetch(`/api/groupfiles/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+        if (res.ok) {
+            dataTable.ajax.reload(null, false);
+            updateBulkButtons();
+        } else {
+            alert('Delete failed');
+        }
+    }
+
     async function loadFiles() {
-        const tbody = document.getElementById('file-list-body');
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center">Loading...</td></tr>';
-        try {
-            const res = await fetch('/api/groupfiles');
-            const files = await res.json();
-            if (files.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center">No files found. Upload a JSON file to get started.</td></tr>';
-                return;
-            }
-            tbody.innerHTML = '';
-            files.forEach((f, index) => {
-                const row = document.createElement('tr');
-                const sizeKB = (f.size / 1024).toFixed(1);
-                const modified = new Date(f.modified).toLocaleString();
-                row.innerHTML = `
-                    <td>${index + 1}</td>
-                    <td>${f.groupName || 'Unknown'}</td>
-                    <td>${f.filename}</td>
-                    <td>${f.totalMembers}</td>
-                    <td>${sizeKB} KB</td>
-                    <td>${modified}</td>
-                    <td>
-                        <a href="/api/groupfiles/download/${encodeURIComponent(f.filename)}" class="btn btn-sm btn-outline-success" title="Download">
-                            <i class="fas fa-download"></i>
-                        </a>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteFile('${f.filename}')" title="Delete">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-        } catch (e) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Failed to load files</td></tr>';
-        }
+        dataTable.ajax.reload(null, false);
     }
 
-    async function deleteFile(filename) {
-        if (!confirm(`Are you sure you want to delete "${filename}"?`)) return;
-        try {
-            const res = await fetch(`/api/groupfiles/${encodeURIComponent(filename)}`, { method: 'DELETE' });
-            if (res.ok) {
-                loadFiles();
-            } else {
-                alert('Failed to delete file');
-            }
-        } catch (e) {
-            alert('Error: ' + e.message);
-        }
-    }
-
+    // Upload form handler
     document.getElementById('upload-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const fileInput = document.getElementById('file-input');
         const resultDiv = document.getElementById('upload-result');
-        if (!fileInput.files[0]) return;
-        
+        if (!fileInput.files.length) return;
         const formData = new FormData();
-        formData.append('file', fileInput.files[0]);
-        
+        for (const file of fileInput.files) {
+            formData.append('files', file);
+        }
         resultDiv.innerHTML = '<span class="text-info"><i class="fas fa-spinner fa-spin"></i> Uploading...</span>';
         try {
-            const res = await fetch('/api/groupfiles/upload', {
-                method: 'POST',
-                body: formData
-            });
+            const res = await fetch('/api/groupfiles/upload', { method: 'POST', body: formData });
             const data = await res.json();
             if (data.success) {
-                resultDiv.innerHTML = '<span class="text-success"><i class="fas fa-check-circle"></i> Uploaded successfully!</span>';
+                let msg = `Uploaded ${data.uploaded.length} file(s).`;
+                if (data.failed.length) msg += ` Failed: ${data.failed.length}`;
+                resultDiv.innerHTML = `<span class="text-success">${msg}</span>`;
                 fileInput.value = '';
-                loadFiles();
+                dataTable.ajax.reload(null, false);
             } else {
-                resultDiv.innerHTML = `<span class="text-danger">Error: ${data.error}</span>`;
+                resultDiv.innerHTML = `<span class="text-danger">${data.error}</span>`;
             }
         } catch (err) {
-            resultDiv.innerHTML = `<span class="text-danger">Upload failed: ${err.message}</span>`;
+            resultDiv.innerHTML = `<span class="text-danger">Upload failed</span>`;
         }
     });
 
-    loadFiles();
+    // Initialize on page load
+    $(document).ready(function() {
+        initDataTable();
+    });
 </script>
 </body>
 </html>

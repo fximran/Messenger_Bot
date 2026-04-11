@@ -68,6 +68,9 @@ This project is mainly intended for personal use, testing, and learning purposes
 1. Install PM2 globally:
    npm install ejs
 
+1. Install PM2 globally:
+   npm install archiver
+
 1. **IMPORTANT: Install additional required packages for the Web Panel:**
    npm install bcrypt express-session sqlite3 node-cron ejs
 
