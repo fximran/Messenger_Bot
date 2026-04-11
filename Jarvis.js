@@ -9,7 +9,7 @@ const bcrypt = require('bcrypt');
 const sqlite3 = require('sqlite3').verbose();
 const cron = require('node-cron');
 const multer = require('multer');
-const archiver = require('archiver');
+const archiver = require('archiver'); // for bulk zip download
 
 // ==================== Database Setup ====================
 const db = new sqlite3.Database('./database.db');
@@ -79,7 +79,9 @@ function getPanelConfig() {
 }
 const panelConfig = getPanelConfig();
 
+// Panel port
 const port = process.env.PORT || panelConfig.PANEL_PORT || 3000;
+// PM2 process name for the bot (used in start/stop/restart/logs)
 const PM2_PROCESS_NAME = panelConfig.PM2_NAME || "messenger-bot";
 
 // ==================== Express Server ====================
@@ -373,7 +375,7 @@ app.post('/api/appstate', requireAuth, (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ----- Group Files Management (box_exports) -----
+// ========== GROUP FILES MANAGEMENT (box_exports) ==========
 const boxExportPath = path.join(__dirname, "Script", "commands", "cache", "box_exports");
 if (!fs.existsSync(boxExportPath)) fs.mkdirSync(boxExportPath, { recursive: true });
 
@@ -398,6 +400,7 @@ app.get('/api/groupfiles', requireAuth, requirePermission(2), (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+
 app.get('/api/groupfiles/download/:filename', requireAuth, requirePermission(2), (req, res) => {
     const filename = req.params.filename;
     const filePath = path.join(boxExportPath, filename);
@@ -408,13 +411,15 @@ app.get('/api/groupfiles/download/:filename', requireAuth, requirePermission(2),
         res.status(500).json({ error: e.message });
     }
 });
+
+// Bulk download as ZIP
 app.post('/api/groupfiles/bulk-download', requireAuth, requirePermission(2), (req, res) => {
     const { files } = req.body;
     if (!files || !Array.isArray(files) || files.length === 0) {
         return res.status(400).json({ error: 'No files specified' });
     }
-    const archive = archiver('zip', { zlib: { level: 9 } });
     res.attachment('groupfiles.zip');
+    const archive = archiver('zip', { zlib: { level: 9 } });
     archive.pipe(res);
     files.forEach(filename => {
         const filePath = path.join(boxExportPath, filename);
@@ -424,6 +429,8 @@ app.post('/api/groupfiles/bulk-download', requireAuth, requirePermission(2), (re
     });
     archive.finalize();
 });
+
+// Bulk delete
 app.post('/api/groupfiles/bulk-delete', requireAuth, requirePermission(2), (req, res) => {
     const { files } = req.body;
     if (!files || !Array.isArray(files) || files.length === 0) {
@@ -446,6 +453,8 @@ app.post('/api/groupfiles/bulk-delete', requireAuth, requirePermission(2), (req,
     });
     res.json({ success: true, deleted, failed });
 });
+
+// Multiple file upload
 const groupUpload = multer({ dest: boxExportPath });
 app.post('/api/groupfiles/upload', requireAuth, requirePermission(2), groupUpload.array('files', 20), (req, res) => {
     try {
@@ -455,7 +464,7 @@ app.post('/api/groupfiles/upload', requireAuth, requirePermission(2), groupUploa
             const originalName = file.originalname;
             if (!originalName.endsWith('.json')) {
                 fs.unlinkSync(file.path);
-                failed.push({ filename: originalName, reason: 'Only JSON files are allowed' });
+                failed.push({ filename: originalName, reason: 'Only JSON files allowed' });
                 return;
             }
             const newPath = path.join(boxExportPath, originalName);
@@ -473,6 +482,7 @@ app.post('/api/groupfiles/upload', requireAuth, requirePermission(2), groupUploa
         res.status(500).json({ error: e.message });
     }
 });
+
 app.delete('/api/groupfiles/:filename', requireAuth, requirePermission(2), (req, res) => {
     const filename = req.params.filename;
     const filePath = path.join(boxExportPath, filename);
@@ -486,7 +496,7 @@ app.delete('/api/groupfiles/:filename', requireAuth, requirePermission(2), (req,
     }
 });
 
-// ----- Auto Messages Management -----
+// ========== AUTO MESSAGES MANAGEMENT (automessage) ==========
 const autoMsgPath = path.join(__dirname, "Script", "commands", "cache", "automessage");
 if (!fs.existsSync(autoMsgPath)) fs.mkdirSync(autoMsgPath, { recursive: true });
 
@@ -497,9 +507,7 @@ app.get('/api/automessages', requireAuth, requirePermission(2), (req, res) => {
             .map(f => {
                 const filePath = path.join(autoMsgPath, f);
                 const stats = fs.statSync(filePath);
-                let groupId = 'Unknown';
-                let enabled = false;
-                let messageCount = 0;
+                let groupId = 'Unknown', enabled = false, messageCount = 0;
                 try {
                     const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
                     groupId = f.replace('automessage_', '').replace('.json', '');
@@ -513,6 +521,7 @@ app.get('/api/automessages', requireAuth, requirePermission(2), (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+
 app.get('/api/automessages/download/:filename', requireAuth, requirePermission(2), (req, res) => {
     const filename = req.params.filename;
     const filePath = path.join(autoMsgPath, filename);
@@ -523,13 +532,15 @@ app.get('/api/automessages/download/:filename', requireAuth, requirePermission(2
         res.status(500).json({ error: e.message });
     }
 });
+
+// Bulk download as ZIP
 app.post('/api/automessages/bulk-download', requireAuth, requirePermission(2), (req, res) => {
     const { files } = req.body;
     if (!files || !Array.isArray(files) || files.length === 0) {
         return res.status(400).json({ error: 'No files specified' });
     }
-    const archive = archiver('zip', { zlib: { level: 9 } });
     res.attachment('automessages.zip');
+    const archive = archiver('zip', { zlib: { level: 9 } });
     archive.pipe(res);
     files.forEach(filename => {
         const filePath = path.join(autoMsgPath, filename);
@@ -539,6 +550,8 @@ app.post('/api/automessages/bulk-download', requireAuth, requirePermission(2), (
     });
     archive.finalize();
 });
+
+// Bulk delete
 app.post('/api/automessages/bulk-delete', requireAuth, requirePermission(2), (req, res) => {
     const { files } = req.body;
     if (!files || !Array.isArray(files) || files.length === 0) {
@@ -561,6 +574,8 @@ app.post('/api/automessages/bulk-delete', requireAuth, requirePermission(2), (re
     });
     res.json({ success: true, deleted, failed });
 });
+
+// Multiple file upload
 const autoMsgUpload = multer({ dest: autoMsgPath });
 app.post('/api/automessages/upload', requireAuth, requirePermission(2), autoMsgUpload.array('files', 20), (req, res) => {
     try {
@@ -570,7 +585,7 @@ app.post('/api/automessages/upload', requireAuth, requirePermission(2), autoMsgU
             const originalName = file.originalname;
             if (!originalName.startsWith('automessage_') || !originalName.endsWith('.json')) {
                 fs.unlinkSync(file.path);
-                failed.push({ filename: originalName, reason: 'Invalid filename format. Must be automessage_<threadID>.json' });
+                failed.push({ filename: originalName, reason: 'Invalid filename format (must be automessage_<threadID>.json)' });
                 return;
             }
             const newPath = path.join(autoMsgPath, originalName);
@@ -588,6 +603,7 @@ app.post('/api/automessages/upload', requireAuth, requirePermission(2), autoMsgU
         res.status(500).json({ error: e.message });
     }
 });
+
 app.delete('/api/automessages/:filename', requireAuth, requirePermission(2), (req, res) => {
     const filename = req.params.filename;
     const filePath = path.join(autoMsgPath, filename);
@@ -600,6 +616,7 @@ app.delete('/api/automessages/:filename', requireAuth, requirePermission(2), (re
         res.status(500).json({ error: e.message });
     }
 });
+
 app.get('/api/automessages/view/:filename', requireAuth, requirePermission(2), (req, res) => {
     const filename = req.params.filename;
     const filePath = path.join(autoMsgPath, filename);
