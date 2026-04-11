@@ -1,5 +1,6 @@
 {
   "language": "en",
+  "DEBUG_MODE": false,
   "DeveloperMode": false,
   "autoCreateDB": true,
   "notiGroup": true,
@@ -102,5 +103,8 @@
   },
   "fish": {
     "cooldownTime": 1000000
+  },
+  "god": {
+    "enable": true
   }
 }
