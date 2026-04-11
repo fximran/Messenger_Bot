@@ -466,6 +466,7 @@ app.post('/api/groupfiles/bulk-delete', requireAuth, requirePermission(2), (req,
     res.json({ success: true, deleted, failed });
 });
 // Multiple upload
+// Multiple upload for group files
 const groupUpload = multer({ dest: boxExportPath });
 app.post('/api/groupfiles/upload', requireAuth, requirePermission(2), groupUpload.array('files', 20), (req, res) => {
     try {
@@ -475,7 +476,8 @@ app.post('/api/groupfiles/upload', requireAuth, requirePermission(2), groupUploa
         const uploaded = [];
         const failed = [];
         req.files.forEach(file => {
-            const originalName = file.originalname;
+            // Decode filename from latin1 to utf8 to preserve Bengali characters
+            const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
             if (!originalName.endsWith('.json')) {
                 fs.unlinkSync(file.path);
                 failed.push({ filename: originalName, reason: 'Only JSON files are allowed' });
@@ -602,6 +604,7 @@ app.post('/api/automessages/bulk-delete', requireAuth, requirePermission(2), (re
     res.json({ success: true, deleted, failed });
 });
 // Multiple upload
+// Multiple upload for automessages
 const autoMsgUpload = multer({ dest: autoMsgPath });
 app.post('/api/automessages/upload', requireAuth, requirePermission(2), autoMsgUpload.array('files', 20), (req, res) => {
     try {
@@ -611,7 +614,8 @@ app.post('/api/automessages/upload', requireAuth, requirePermission(2), autoMsgU
         const uploaded = [];
         const failed = [];
         req.files.forEach(file => {
-            const originalName = file.originalname;
+            // Decode filename from latin1 to utf8 to preserve Bengali characters
+            const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
             if (!originalName.startsWith('automessage_') || !originalName.endsWith('.json')) {
                 fs.unlinkSync(file.path);
                 failed.push({ filename: originalName, reason: 'Invalid filename format. Must be automessage_<threadID>.json' });
