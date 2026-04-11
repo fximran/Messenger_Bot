@@ -73,7 +73,6 @@ const port = process.env.PORT || 3000;
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -191,6 +190,9 @@ app.get('/admin/settings', requireAuth, requirePermission(2), (req, res) => {
 });
 app.get('/admin/groupfiles', requireAuth, requirePermission(2), (req, res) => {
     res.render('groupfiles', { user: req.session.user, currentPage: 'groupfiles', pkgVersion: BOT_VERSION });
+});
+app.get('/admin/automessages', requireAuth, requirePermission(2), (req, res) => {
+    res.render('automessages', { user: req.session.user, currentPage: 'automessages', pkgVersion: BOT_VERSION });
 });
 
 // ----- User Management APIs -----
@@ -376,20 +378,13 @@ app.get('/api/groupfiles', requireAuth, requirePermission(2), (req, res) => {
                     groupName = content.groupName || 'Unknown';
                     totalMembers = content.totalMembers || 0;
                 } catch (e) {}
-                return {
-                    filename: f,
-                    groupName,
-                    totalMembers,
-                    size: stats.size,
-                    modified: stats.mtime
-                };
+                return { filename: f, groupName, totalMembers, size: stats.size, modified: stats.mtime };
             });
         res.json(files);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
-
 app.get('/api/groupfiles/download/:filename', requireAuth, requirePermission(2), (req, res) => {
     const filename = req.params.filename;
     const filePath = path.join(boxExportPath, filename);
@@ -400,9 +395,8 @@ app.get('/api/groupfiles/download/:filename', requireAuth, requirePermission(2),
         res.status(500).json({ error: e.message });
     }
 });
-
-const upload = multer({ dest: boxExportPath });
-app.post('/api/groupfiles/upload', requireAuth, requirePermission(2), upload.single('file'), (req, res) => {
+const groupUpload = multer({ dest: boxExportPath });
+app.post('/api/groupfiles/upload', requireAuth, requirePermission(2), groupUpload.single('file'), (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
         const originalName = req.file.originalname;
@@ -419,7 +413,6 @@ app.post('/api/groupfiles/upload', requireAuth, requirePermission(2), upload.sin
         res.status(500).json({ error: e.message });
     }
 });
-
 app.delete('/api/groupfiles/:filename', requireAuth, requirePermission(2), (req, res) => {
     const filename = req.params.filename;
     const filePath = path.join(boxExportPath, filename);
@@ -428,6 +421,85 @@ app.delete('/api/groupfiles/:filename', requireAuth, requirePermission(2), (req,
         fs.unlinkSync(filePath);
         logActivity(req.session.user.id, req.session.user.name, 'DELETE_GROUPFILE', `Deleted ${filename}`, req);
         res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ----- Auto Messages Management -----
+const autoMsgPath = path.join(__dirname, "cache", "automessage");
+if (!fs.existsSync(autoMsgPath)) fs.mkdirSync(autoMsgPath, { recursive: true });
+
+app.get('/api/automessages', requireAuth, requirePermission(2), (req, res) => {
+    try {
+        const files = fs.readdirSync(autoMsgPath)
+            .filter(f => f.endsWith('.json'))
+            .map(f => {
+                const filePath = path.join(autoMsgPath, f);
+                const stats = fs.statSync(filePath);
+                let groupId = 'Unknown';
+                let enabled = false;
+                let messageCount = 0;
+                try {
+                    const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                    groupId = f.replace('automessage_', '').replace('.json', '');
+                    enabled = content.enabled || false;
+                    messageCount = content.messages?.length || 0;
+                } catch (e) {}
+                return { filename: f, groupId, enabled, messageCount, size: stats.size, modified: stats.mtime };
+            });
+        res.json(files);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+app.get('/api/automessages/download/:filename', requireAuth, requirePermission(2), (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.join(autoMsgPath, filename);
+    try {
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+        res.download(filePath, filename);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+app.delete('/api/automessages/:filename', requireAuth, requirePermission(2), (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.join(autoMsgPath, filename);
+    try {
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+        fs.unlinkSync(filePath);
+        logActivity(req.session.user.id, req.session.user.name, 'DELETE_AUTOMSG', `Deleted ${filename}`, req);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+const autoMsgUpload = multer({ dest: autoMsgPath });
+app.post('/api/automessages/upload', requireAuth, requirePermission(2), autoMsgUpload.single('file'), (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+        const originalName = req.file.originalname;
+        if (!originalName.startsWith('automessage_') || !originalName.endsWith('.json')) {
+            fs.unlinkSync(req.file.path);
+            return res.status(400).json({ error: 'Invalid filename format. Must be automessage_<threadID>.json' });
+        }
+        const newPath = path.join(autoMsgPath, originalName);
+        if (fs.existsSync(newPath)) fs.unlinkSync(newPath);
+        fs.renameSync(req.file.path, newPath);
+        logActivity(req.session.user.id, req.session.user.name, 'UPLOAD_AUTOMSG', `Uploaded ${originalName}`, req);
+        res.json({ success: true, filename: originalName });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+app.get('/api/automessages/view/:filename', requireAuth, requirePermission(2), (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.join(autoMsgPath, filename);
+    try {
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+        const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        res.json(content);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
