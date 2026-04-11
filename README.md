@@ -74,7 +74,10 @@ This project is mainly intended for personal use, testing, and learning purposes
 1. Copy example config:
    cp config.json.example config.json
 
-2. Edit `config.json`:
+1. Copy example appstate:
+   cp appstate.json.example appstate.json
+
+1. Edit `config.json`:
    nano config.json
 
    Modify these fields:
@@ -85,7 +88,7 @@ This project is mainly intended for personal use, testing, and learning purposes
    - `language` : "en", "bn", or "hi"
    - `DEBUG_MODE`: true or false
 
-3. Add `appstate.json` (Facebook cookies) in the root directory.
+1. Add `appstate.json` (Facebook cookies) in the root directory.
    Without this, the bot cannot log in.
 
 ---
