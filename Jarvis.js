@@ -440,6 +440,85 @@ app.delete('/api/groupfiles/:filename', requireAuth, requirePermission(2), (req,
     }
 });
 
+
+// Bulk download - accept array of filenames
+app.post('/api/groupfiles/bulk-download', requireAuth, requirePermission(2), (req, res) => {
+    const { files } = req.body;
+    if (!files || !Array.isArray(files) || files.length === 0) {
+        return res.status(400).json({ error: 'No files specified' });
+    }
+    // For simplicity, we'll zip files on the fly using archiver
+    const archiver = require('archiver');
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    res.attachment('groupfiles.zip');
+    archive.pipe(res);
+    
+    files.forEach(filename => {
+        const filePath = path.join(boxExportPath, filename);
+        if (fs.existsSync(filePath)) {
+            archive.file(filePath, { name: filename });
+        }
+    });
+    archive.finalize();
+});
+
+// Bulk delete - accept array of filenames
+app.post('/api/groupfiles/bulk-delete', requireAuth, requirePermission(2), (req, res) => {
+    const { files } = req.body;
+    if (!files || !Array.isArray(files) || files.length === 0) {
+        return res.status(400).json({ error: 'No files specified' });
+    }
+    const deleted = [];
+    const failed = [];
+    files.forEach(filename => {
+        const filePath = path.join(boxExportPath, filename);
+        try {
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+                deleted.push(filename);
+                logActivity(req.session.user.id, req.session.user.name, 'DELETE_GROUPFILE_BULK', `Deleted ${filename}`, req);
+            } else {
+                failed.push({ filename, reason: 'Not found' });
+            }
+        } catch (e) {
+            failed.push({ filename, reason: e.message });
+        }
+    });
+    res.json({ success: true, deleted, failed });
+});
+
+// Modify upload to accept multiple files (using array)
+const groupUpload = multer({ dest: boxExportPath });
+app.post('/api/groupfiles/upload', requireAuth, requirePermission(2), groupUpload.array('files', 20), (req, res) => {
+    try {
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ error: 'No files uploaded' });
+        }
+        const uploaded = [];
+        const failed = [];
+        req.files.forEach(file => {
+            const originalName = file.originalname;
+            if (!originalName.endsWith('.json')) {
+                fs.unlinkSync(file.path);
+                failed.push({ filename: originalName, reason: 'Only JSON files are allowed' });
+                return;
+            }
+            const newPath = path.join(boxExportPath, originalName);
+            try {
+                if (fs.existsSync(newPath)) fs.unlinkSync(newPath);
+                fs.renameSync(file.path, newPath);
+                uploaded.push(originalName);
+                logActivity(req.session.user.id, req.session.user.name, 'UPLOAD_GROUPFILE', `Uploaded ${originalName}`, req);
+            } catch (e) {
+                failed.push({ filename: originalName, reason: e.message });
+            }
+        });
+        res.json({ success: true, uploaded, failed });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ----- Auto Messages Management -----
 const autoMsgPath = path.join(__dirname, "Script", "commands", "cache", "automessage");
 if (!fs.existsSync(autoMsgPath)) fs.mkdirSync(autoMsgPath, { recursive: true });
@@ -514,6 +593,83 @@ app.get('/api/automessages/view/:filename', requireAuth, requirePermission(2), (
         if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
         const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
         res.json(content);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Bulk download - accept array of filenames
+app.post('/api/automessages/bulk-download', requireAuth, requirePermission(2), (req, res) => {
+    const { files } = req.body;
+    if (!files || !Array.isArray(files) || files.length === 0) {
+        return res.status(400).json({ error: 'No files specified' });
+    }
+    const archiver = require('archiver');
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    res.attachment('automessages.zip');
+    archive.pipe(res);
+    
+    files.forEach(filename => {
+        const filePath = path.join(autoMsgPath, filename);
+        if (fs.existsSync(filePath)) {
+            archive.file(filePath, { name: filename });
+        }
+    });
+    archive.finalize();
+});
+
+// Bulk delete - accept array of filenames
+app.post('/api/automessages/bulk-delete', requireAuth, requirePermission(2), (req, res) => {
+    const { files } = req.body;
+    if (!files || !Array.isArray(files) || files.length === 0) {
+        return res.status(400).json({ error: 'No files specified' });
+    }
+    const deleted = [];
+    const failed = [];
+    files.forEach(filename => {
+        const filePath = path.join(autoMsgPath, filename);
+        try {
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+                deleted.push(filename);
+                logActivity(req.session.user.id, req.session.user.name, 'DELETE_AUTOMSG_BULK', `Deleted ${filename}`, req);
+            } else {
+                failed.push({ filename, reason: 'Not found' });
+            }
+        } catch (e) {
+            failed.push({ filename, reason: e.message });
+        }
+    });
+    res.json({ success: true, deleted, failed });
+});
+
+// Modify upload to accept multiple files
+const autoMsgUpload = multer({ dest: autoMsgPath });
+app.post('/api/automessages/upload', requireAuth, requirePermission(2), autoMsgUpload.array('files', 20), (req, res) => {
+    try {
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ error: 'No files uploaded' });
+        }
+        const uploaded = [];
+        const failed = [];
+        req.files.forEach(file => {
+            const originalName = file.originalname;
+            if (!originalName.startsWith('automessage_') || !originalName.endsWith('.json')) {
+                fs.unlinkSync(file.path);
+                failed.push({ filename: originalName, reason: 'Invalid filename format. Must be automessage_<threadID>.json' });
+                return;
+            }
+            const newPath = path.join(autoMsgPath, originalName);
+            try {
+                if (fs.existsSync(newPath)) fs.unlinkSync(newPath);
+                fs.renameSync(file.path, newPath);
+                uploaded.push(originalName);
+                logActivity(req.session.user.id, req.session.user.name, 'UPLOAD_AUTOMSG', `Uploaded ${originalName}`, req);
+            } catch (e) {
+                failed.push({ filename: originalName, reason: e.message });
+            }
+        });
+        res.json({ success: true, uploaded, failed });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
