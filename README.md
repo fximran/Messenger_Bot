@@ -49,15 +49,26 @@ This project is mainly intended for personal use, testing, and learning purposes
    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
    sudo apt install -y nodejs git
 
-2. Install PM2 globally:
-   npm install -g pm2
-
-3. Clone the repository and install dependencies:
+1. Clone the repository and install dependencies:
    git clone https://github.com/fximran/Messenger_Bot
    cd Messenger_Bot
+
+1. Install npm:
    npm install
 
-4. **IMPORTANT: Install additional required packages for the Web Panel:**
+1. Install PM2 globally:
+   npm install -g pm2
+
+1. Install PM2 globally:
+   npm install -g pm2
+
+1. Install PM2 globally:
+   npm install bcrypt express-session sqlite3 node-cron multer
+
+1. Install PM2 globally:
+   npm install ejs
+
+1. **IMPORTANT: Install additional required packages for the Web Panel:**
    npm install bcrypt express-session sqlite3 node-cron ejs
 
    _Explanation of these packages:_

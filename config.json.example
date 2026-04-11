@@ -1,4 +1,6 @@
 {
+  "PM2_NAME": "messenger-bot",
+  "PANEL_PORT": 3000,
   "language": "en",
   "DEBUG_MODE": false,
   "DeveloperMode": false,

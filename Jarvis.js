@@ -66,9 +66,25 @@ try {
 const BOT_NAME = pkg.name || "Islamick Bot";
 const BOT_VERSION = pkg.version || "5.0.0";
 
+// ==================== Read config for panel settings ====================
+function getPanelConfig() {
+    try {
+        const configPath = path.join(__dirname, "config.json");
+        if (fs.existsSync(configPath)) {
+            return JSON.parse(fs.readFileSync(configPath, "utf8"));
+        }
+    } catch (e) {}
+    return {};
+}
+const panelConfig = getPanelConfig();
+
+// Panel port
+const port = process.env.PORT || panelConfig.PANEL_PORT || 3000;
+// PM2 process name for the bot (used in start/stop/restart/logs)
+const PM2_PROCESS_NAME = panelConfig.PM2_NAME || "messenger-bot";
+
 // ==================== Express Server ====================
 const app = express();
-const port = process.env.PORT || 3000;
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -103,8 +119,6 @@ function logActivity(userId, userName, action, details = '', req = null) {
         [userId, userName, action, details, ip],
         (err) => { if (err) console.error('Activity log error:', err); });
 }
-
-const PM2_PROCESS_NAME = "messenger-bot";
 
 function getPM2Status(callback) {
     exec(`pm2 jlist`, (error, stdout, stderr) => {
@@ -508,6 +522,7 @@ app.get('/api/automessages/view/:filename', requireAuth, requirePermission(2), (
 // ==================== Start Server ====================
 app.listen(port, () => {
     logger(`Server running on port ${port}`, "[ Starting ]");
+    logger(`PM2 process name: ${PM2_PROCESS_NAME}`, "[ Info ]");
     logger(`Login at: http://localhost:${port}/login`, "[ Info ]");
 }).on("error", (err) => logger(`Server error: ${err.message}`, "[ Error ]"));
 
