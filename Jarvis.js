@@ -208,7 +208,9 @@ app.get('/admin/groupfiles', requireAuth, requirePermission(2), (req, res) => {
 app.get('/admin/automessages', requireAuth, requirePermission(2), (req, res) => {
     res.render('automessages', { user: req.session.user, currentPage: 'automessages', pkgVersion: BOT_VERSION });
 });
-
+app.get('/admin/faqfiles', requireAuth, requirePermission(2), (req, res) => {
+    res.render('faqfiles', { user: req.session.user, currentPage: 'faqfiles', pkgVersion: BOT_VERSION });
+});
 // ----- User Management APIs -----
 app.get('/api/users', requireAuth, requirePermission(2), (req, res) => {
     db.all('SELECT id, name, email, permission, created_at, updated_at FROM users ORDER BY id', (err, rows) => {
@@ -636,7 +638,150 @@ app.post('/api/automessages/upload', requireAuth, requirePermission(2), autoMsgU
         res.status(500).json({ error: e.message });
     }
 });
+// ----- FAQ Files Management -----
+const faqPath = path.join(__dirname, "Script", "commands", "cache", "faq");
+if (!fs.existsSync(faqPath)) fs.mkdirSync(faqPath, { recursive: true });
 
+app.get('/api/faqfiles', requireAuth, requirePermission(2), (req, res) => {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    try {
+        const files = fs.readdirSync(faqPath)
+            .filter(f => f.endsWith('.json'))
+            .map(f => {
+                const filePath = path.join(faqPath, f);
+                const stats = fs.statSync(filePath);
+                let groupId = 'Unknown';
+                let questionCount = 0;
+                try {
+                    const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                    groupId = f.replace('faq_', '').replace('.json', '');
+                    questionCount = content.length || 0;
+                } catch (e) {}
+                return {
+                    filename: f,
+                    groupId,
+                    questionCount,
+                    size: stats.size,
+                    modified: stats.mtime
+                };
+            });
+        res.json(files);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/faqfiles/download/:filename', requireAuth, requirePermission(2), (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.join(faqPath, filename);
+    try {
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+        res.download(filePath, filename);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/faqfiles/:filename', requireAuth, requirePermission(2), (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.join(faqPath, filename);
+    try {
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+        fs.unlinkSync(filePath);
+        logActivity(req.session.user.id, req.session.user.name, 'DELETE_FAQFILE', `Deleted ${filename}`, req);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/faqfiles/view/:filename', requireAuth, requirePermission(2), (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.join(faqPath, filename);
+    try {
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+        const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        res.json(content);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Bulk download
+app.post('/api/faqfiles/bulk-download', requireAuth, requirePermission(2), (req, res) => {
+    const { files } = req.body;
+    if (!files || !Array.isArray(files) || files.length === 0) {
+        return res.status(400).json({ error: 'No files specified' });
+    }
+    const archiver = require('archiver');
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    res.attachment('faqfiles.zip');
+    archive.pipe(res);
+    files.forEach(filename => {
+        const filePath = path.join(faqPath, filename);
+        if (fs.existsSync(filePath)) {
+            archive.file(filePath, { name: filename });
+        }
+    });
+    archive.finalize();
+});
+
+// Bulk delete
+app.post('/api/faqfiles/bulk-delete', requireAuth, requirePermission(2), (req, res) => {
+    const { files } = req.body;
+    if (!files || !Array.isArray(files) || files.length === 0) {
+        return res.status(400).json({ error: 'No files specified' });
+    }
+    const deleted = [];
+    const failed = [];
+    files.forEach(filename => {
+        const filePath = path.join(faqPath, filename);
+        try {
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+                deleted.push(filename);
+                logActivity(req.session.user.id, req.session.user.name, 'DELETE_FAQFILE_BULK', `Deleted ${filename}`, req);
+            } else {
+                failed.push({ filename, reason: 'Not found' });
+            }
+        } catch (e) {
+            failed.push({ filename, reason: e.message });
+        }
+    });
+    res.json({ success: true, deleted, failed });
+});
+
+// Multiple upload for FAQ files
+const faqUpload = multer({ dest: faqPath });
+app.post('/api/faqfiles/upload', requireAuth, requirePermission(2), faqUpload.array('files', 20), (req, res) => {
+    try {
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ error: 'No files uploaded' });
+        }
+        const uploaded = [];
+        const failed = [];
+        req.files.forEach(file => {
+            const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+            if (!originalName.startsWith('faq_') || !originalName.endsWith('.json')) {
+                fs.unlinkSync(file.path);
+                failed.push({ filename: originalName, reason: 'Invalid filename format. Must be faq_<threadID>.json' });
+                return;
+            }
+            const newPath = path.join(faqPath, originalName);
+            try {
+                if (fs.existsSync(newPath)) fs.unlinkSync(newPath);
+                fs.renameSync(file.path, newPath);
+                uploaded.push(originalName);
+                logActivity(req.session.user.id, req.session.user.name, 'UPLOAD_FAQFILE', `Uploaded ${originalName}`, req);
+            } catch (e) {
+                failed.push({ filename: originalName, reason: e.message });
+            }
+        });
+        res.json({ success: true, uploaded, failed });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 // ==================== Start Server ====================
 app.listen(port, () => {
     logger(`Server running on port ${port}`, "[ Starting ]");
