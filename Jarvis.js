@@ -409,24 +409,6 @@ app.get('/api/groupfiles/download/:filename', requireAuth, requirePermission(2),
         res.status(500).json({ error: e.message });
     }
 });
-const groupUpload = multer({ dest: boxExportPath });
-app.post('/api/groupfiles/upload', requireAuth, requirePermission(2), groupUpload.single('file'), (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-        const originalName = req.file.originalname;
-        if (!originalName.endsWith('.json')) {
-            fs.unlinkSync(req.file.path);
-            return res.status(400).json({ error: 'Only JSON files are allowed' });
-        }
-        const newPath = path.join(boxExportPath, originalName);
-        if (fs.existsSync(newPath)) fs.unlinkSync(newPath);
-        fs.renameSync(req.file.path, newPath);
-        logActivity(req.session.user.id, req.session.user.name, 'UPLOAD_GROUPFILE', `Uploaded ${originalName}`, req);
-        res.json({ success: true, filename: originalName });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
 app.delete('/api/groupfiles/:filename', requireAuth, requirePermission(2), (req, res) => {
     const filename = req.params.filename;
     const filePath = path.join(boxExportPath, filename);
@@ -439,20 +421,16 @@ app.delete('/api/groupfiles/:filename', requireAuth, requirePermission(2), (req,
         res.status(500).json({ error: e.message });
     }
 });
-
-
-// Bulk download - accept array of filenames
+// Bulk download
 app.post('/api/groupfiles/bulk-download', requireAuth, requirePermission(2), (req, res) => {
     const { files } = req.body;
     if (!files || !Array.isArray(files) || files.length === 0) {
         return res.status(400).json({ error: 'No files specified' });
     }
-    // For simplicity, we'll zip files on the fly using archiver
     const archiver = require('archiver');
     const archive = archiver('zip', { zlib: { level: 9 } });
     res.attachment('groupfiles.zip');
     archive.pipe(res);
-    
     files.forEach(filename => {
         const filePath = path.join(boxExportPath, filename);
         if (fs.existsSync(filePath)) {
@@ -461,8 +439,7 @@ app.post('/api/groupfiles/bulk-download', requireAuth, requirePermission(2), (re
     });
     archive.finalize();
 });
-
-// Bulk delete - accept array of filenames
+// Bulk delete
 app.post('/api/groupfiles/bulk-delete', requireAuth, requirePermission(2), (req, res) => {
     const { files } = req.body;
     if (!files || !Array.isArray(files) || files.length === 0) {
@@ -486,8 +463,7 @@ app.post('/api/groupfiles/bulk-delete', requireAuth, requirePermission(2), (req,
     });
     res.json({ success: true, deleted, failed });
 });
-
-// Modify upload to accept multiple files (using array)
+// Multiple upload
 const groupUpload = multer({ dest: boxExportPath });
 app.post('/api/groupfiles/upload', requireAuth, requirePermission(2), groupUpload.array('files', 20), (req, res) => {
     try {
@@ -568,24 +544,6 @@ app.delete('/api/automessages/:filename', requireAuth, requirePermission(2), (re
         res.status(500).json({ error: e.message });
     }
 });
-const autoMsgUpload = multer({ dest: autoMsgPath });
-app.post('/api/automessages/upload', requireAuth, requirePermission(2), autoMsgUpload.single('file'), (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-        const originalName = req.file.originalname;
-        if (!originalName.startsWith('automessage_') || !originalName.endsWith('.json')) {
-            fs.unlinkSync(req.file.path);
-            return res.status(400).json({ error: 'Invalid filename format. Must be automessage_<threadID>.json' });
-        }
-        const newPath = path.join(autoMsgPath, originalName);
-        if (fs.existsSync(newPath)) fs.unlinkSync(newPath);
-        fs.renameSync(req.file.path, newPath);
-        logActivity(req.session.user.id, req.session.user.name, 'UPLOAD_AUTOMSG', `Uploaded ${originalName}`, req);
-        res.json({ success: true, filename: originalName });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
 app.get('/api/automessages/view/:filename', requireAuth, requirePermission(2), (req, res) => {
     const filename = req.params.filename;
     const filePath = path.join(autoMsgPath, filename);
@@ -597,8 +555,7 @@ app.get('/api/automessages/view/:filename', requireAuth, requirePermission(2), (
         res.status(500).json({ error: e.message });
     }
 });
-
-// Bulk download - accept array of filenames
+// Bulk download
 app.post('/api/automessages/bulk-download', requireAuth, requirePermission(2), (req, res) => {
     const { files } = req.body;
     if (!files || !Array.isArray(files) || files.length === 0) {
@@ -608,7 +565,6 @@ app.post('/api/automessages/bulk-download', requireAuth, requirePermission(2), (
     const archive = archiver('zip', { zlib: { level: 9 } });
     res.attachment('automessages.zip');
     archive.pipe(res);
-    
     files.forEach(filename => {
         const filePath = path.join(autoMsgPath, filename);
         if (fs.existsSync(filePath)) {
@@ -617,8 +573,7 @@ app.post('/api/automessages/bulk-download', requireAuth, requirePermission(2), (
     });
     archive.finalize();
 });
-
-// Bulk delete - accept array of filenames
+// Bulk delete
 app.post('/api/automessages/bulk-delete', requireAuth, requirePermission(2), (req, res) => {
     const { files } = req.body;
     if (!files || !Array.isArray(files) || files.length === 0) {
@@ -642,8 +597,7 @@ app.post('/api/automessages/bulk-delete', requireAuth, requirePermission(2), (re
     });
     res.json({ success: true, deleted, failed });
 });
-
-// Modify upload to accept multiple files
+// Multiple upload
 const autoMsgUpload = multer({ dest: autoMsgPath });
 app.post('/api/automessages/upload', requireAuth, requirePermission(2), autoMsgUpload.array('files', 20), (req, res) => {
     try {
