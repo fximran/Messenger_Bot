@@ -150,7 +150,7 @@ async function processFile(api, filename) {
         }
     }
 
-    // 2. Send one request
+    // 2. Send one request (using callback-based addFriend)
     for (const member of data.members) {
         if (!member.isFriend && !member.requestSent && !global.friendManager.sentThisSession.has(member.id)) {
             let userName = member.name;
@@ -165,25 +165,31 @@ async function processFile(api, filename) {
                 }
             }
 
-            try {
-                await api.sendFriendRequest(member.id);
-                member.requestSent = true;
-                member.lastChecked = Date.now();
-                global.friendManager.sentThisSession.add(member.id);
-                changed = true;
-                addLogEntry(member.id, userName, filename);
-                console.log(`[Friends] Sent to ${userName} (${member.id}) from ${filename}`);
-                break;
-            } catch(e) {
-                let errorMsg = e.message || String(e);
-                if (e.error) errorMsg = e.error;
-                if (e.errorDescription) errorMsg = e.errorDescription;
-                console.error(`[Friends] Failed to send to ${member.id}:`, errorMsg);
-                addErrorEntry(member.id, userName, filename, errorMsg);
-                removeUserFromFile(filename, member.id);
-                console.log(`[Friends] Removed failed user ${member.id} (${userName}) from ${filename}`);
-                break;
-            }
+            // Use callback-based addFriend
+            await new Promise((resolve) => {
+                api.addFriend(member.id, (err, data) => {
+                    if (err) {
+                        let errorMsg = err.message || String(err);
+                        if (err.error) errorMsg = err.error;
+                        if (err.errorDescription) errorMsg = err.errorDescription;
+                        if (data && data.error) errorMsg = data.error;
+                        console.error(`[Friends] Failed to send to ${member.id}:`, errorMsg);
+                        addErrorEntry(member.id, userName, filename, errorMsg);
+                        removeUserFromFile(filename, member.id);
+                        console.log(`[Friends] Removed failed user ${member.id} (${userName}) from ${filename}`);
+                        resolve();
+                    } else {
+                        member.requestSent = true;
+                        member.lastChecked = Date.now();
+                        global.friendManager.sentThisSession.add(member.id);
+                        changed = true;
+                        addLogEntry(member.id, userName, filename);
+                        console.log(`[Friends] Sent to ${userName} (${member.id}) from ${filename}`);
+                        resolve();
+                    }
+                });
+            });
+            break; // Only one request per cycle
         }
     }
 
