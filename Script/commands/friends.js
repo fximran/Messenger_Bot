@@ -3,10 +3,10 @@ const path = require("path");
 
 module.exports.config = {
     name: "friends",
-    version: "3.1.0",
+    version: "4.0.0",
     hasPermssion: 2,
     credits: "MQL1 Community",
-    description: "Auto send friend requests with interactive controls and auto-remove on failure",
+    description: "Auto send friend requests with multi-bot support and auto-remove on failure",
     commandCategory: "Admin",
     usages: "list | start <file> [min] | stop <file> | reset <file> | status | report [date] | errors",
     cooldowns: 5
@@ -49,21 +49,22 @@ function saveLogs(date, logs) {
     fs.writeFileSync(getLogPath(date), JSON.stringify(logs, null, 2));
 }
 
-function addLogEntry(userId, name, sourceFile) {
+function addLogEntry(userId, name, sourceFile, botId) {
     const date = getTodayDate();
     const logs = loadLogs(date);
-    logs.push({ timestamp: Date.now(), userId, name, sourceFile });
+    logs.push({ timestamp: Date.now(), userId, name, sourceFile, botId });
     saveLogs(date, logs);
 }
 
-function addErrorEntry(userId, name, sourceFile, errorMsg) {
+function addErrorEntry(userId, name, sourceFile, errorMsg, botId) {
     const errors = JSON.parse(fs.readFileSync(errorsLogPath, 'utf8'));
     errors.push({
         timestamp: Date.now(),
         userId,
         name: name || "Unknown",
         sourceFile,
-        error: errorMsg
+        error: errorMsg,
+        botId
     });
     if (errors.length > 100) errors.shift();
     fs.writeFileSync(errorsLogPath, JSON.stringify(errors, null, 2));
@@ -107,39 +108,79 @@ function removeUserFromFile(filename, userId) {
     return false;
 }
 
+// Migrate old format to new multi-bot format
+function migrateMember(member, botId) {
+    if (!member.bots) {
+        // Old format: { id, name, isFriend, requestSent, lastChecked }
+        member.bots = {};
+        if (typeof member.isFriend !== 'undefined' || typeof member.requestSent !== 'undefined') {
+            member.bots[botId] = {
+                isFriend: member.isFriend || false,
+                requestSent: member.requestSent || false,
+                lastChecked: member.lastChecked || null
+            };
+        }
+        delete member.isFriend;
+        delete member.requestSent;
+        delete member.lastChecked;
+    }
+    // Ensure current bot has an entry
+    if (!member.bots[botId]) {
+        member.bots[botId] = { isFriend: false, requestSent: false, lastChecked: null };
+    }
+}
+
+// Scan file: migrate, update names, check friend status for current bot
 async function scanFile(api, filename) {
+    const botId = api.getCurrentUserID();
     const data = loadFile(filename);
     let changed = false;
     for (const member of data.members) {
-        if (typeof member.isFriend === 'undefined') member.isFriend = false;
-        if (typeof member.requestSent === 'undefined') member.requestSent = false;
+        migrateMember(member, botId);
+        const botData = member.bots[botId];
+        // Update name if missing
         if (!member.name) {
             try {
                 const info = await api.getUserInfo(member.id);
                 member.name = info[member.id]?.name || "Unknown";
-                member.isFriend = info[member.id]?.isFriend || false;
-                member.lastChecked = Date.now();
                 changed = true;
+            } catch(e) {}
+        }
+        // Update friend status if not already friend
+        if (!botData.isFriend) {
+            try {
+                const info = await api.getUserInfo(member.id);
+                const isFriendNow = info[member.id]?.isFriend || false;
+                if (isFriendNow !== botData.isFriend) {
+                    botData.isFriend = isFriendNow;
+                    if (isFriendNow) botData.requestSent = false;
+                    botData.lastChecked = Date.now();
+                    changed = true;
+                }
             } catch(e) {}
         }
     }
     if (changed) saveFile(filename, data);
 }
 
+// Process file: send one request for current bot
 async function processFile(api, filename) {
+    const botId = api.getCurrentUserID();
     const data = loadFile(filename);
     let changed = false;
 
-    // 1. Update friend status for non-friends
+    // 1. Update friend status for current bot
     for (const member of data.members) {
-        if (!member.isFriend) {
+        migrateMember(member, botId);
+        const botData = member.bots[botId];
+        if (!botData.isFriend) {
             try {
                 const info = await api.getUserInfo(member.id);
                 const isFriendNow = info[member.id]?.isFriend || false;
-                if (isFriendNow !== member.isFriend) {
-                    member.isFriend = isFriendNow;
-                    if (isFriendNow) member.requestSent = false;
-                    member.lastChecked = Date.now();
+                if (isFriendNow !== botData.isFriend) {
+                    botData.isFriend = isFriendNow;
+                    if (isFriendNow) botData.requestSent = false;
+                    botData.lastChecked = Date.now();
                     changed = true;
                 }
                 if (!member.name && info[member.id]?.name) {
@@ -150,9 +191,13 @@ async function processFile(api, filename) {
         }
     }
 
-    // 2. Send one request (using callback-based addFriend)
+    // 2. Send one request
+    // Priority 1: Users with no request from current bot and not friend
+    // Priority 2: If all are already requested/friend, pick any pending for current bot anyway
     for (const member of data.members) {
-        if (!member.isFriend && !member.requestSent && !global.friendManager.sentThisSession.has(member.id)) {
+        migrateMember(member, botId);
+        const botData = member.bots[botId];
+        if (!botData.isFriend && !botData.requestSent && !global.friendManager.sentThisSession.has(member.id)) {
             let userName = member.name;
             if (!userName) {
                 try {
@@ -165,31 +210,25 @@ async function processFile(api, filename) {
                 }
             }
 
-            // Use callback-based addFriend
-            await new Promise((resolve) => {
-                api.addFriend(member.id, (err, data) => {
-                    if (err) {
-                        let errorMsg = err.message || String(err);
-                        if (err.error) errorMsg = err.error;
-                        if (err.errorDescription) errorMsg = err.errorDescription;
-                        if (data && data.error) errorMsg = data.error;
-                        console.error(`[Friends] Failed to send to ${member.id}:`, errorMsg);
-                        addErrorEntry(member.id, userName, filename, errorMsg);
-                        removeUserFromFile(filename, member.id);
-                        console.log(`[Friends] Removed failed user ${member.id} (${userName}) from ${filename}`);
-                        resolve();
-                    } else {
-                        member.requestSent = true;
-                        member.lastChecked = Date.now();
-                        global.friendManager.sentThisSession.add(member.id);
-                        changed = true;
-                        addLogEntry(member.id, userName, filename);
-                        console.log(`[Friends] Sent to ${userName} (${member.id}) from ${filename}`);
-                        resolve();
-                    }
-                });
-            });
-            break; // Only one request per cycle
+            try {
+                await api.sendFriendRequest(member.id);
+                botData.requestSent = true;
+                botData.lastChecked = Date.now();
+                global.friendManager.sentThisSession.add(member.id);
+                changed = true;
+                addLogEntry(member.id, userName, filename, botId);
+                console.log(`[Friends] Bot ${botId} sent to ${userName} (${member.id}) from ${filename}`);
+                break;
+            } catch(e) {
+                let errorMsg = e.message || String(e);
+                if (e.error) errorMsg = e.error;
+                if (e.errorDescription) errorMsg = e.errorDescription;
+                console.error(`[Friends] Bot ${botId} failed to send to ${member.id}:`, errorMsg);
+                addErrorEntry(member.id, userName, filename, errorMsg, botId);
+                removeUserFromFile(filename, member.id);
+                console.log(`[Friends] Removed failed user ${member.id} from ${filename}`);
+                break;
+            }
         }
     }
 
@@ -216,19 +255,25 @@ function stopJobForFile(filename) {
     return false;
 }
 
-function resetFile(filename) {
+function resetFile(filename, botId) {
     const data = loadFile(filename);
-    for (const member of data.members) member.lastChecked = null;
+    for (const member of data.members) {
+        if (member.bots && member.bots[botId]) {
+            member.bots[botId].lastChecked = null;
+        }
+    }
     saveFile(filename, data);
 }
 
-function getFileStats(filename) {
+function getFileStats(filename, botId) {
     const data = loadFile(filename);
     let total = data.members.length;
     let friends = 0, requested = 0;
     for (const m of data.members) {
-        if (m.isFriend) friends++;
-        else if (m.requestSent) requested++;
+        if (m.bots && m.bots[botId]) {
+            if (m.bots[botId].isFriend) friends++;
+            else if (m.bots[botId].requestSent) requested++;
+        }
     }
     return { total, friends, requested, pending: total - friends - requested };
 }
@@ -258,7 +303,7 @@ module.exports.run = async ({ api, event, args }) => {
         for (let i = 0; i < logs.length; i++) {
             const l = logs[i];
             const time = new Date(l.timestamp).toLocaleTimeString();
-            msg += `${i+1}. ${l.name} (${l.userId})\n   📁 ${l.sourceFile} at ${time}\n\n`;
+            msg += `${i+1}. ${l.name} (${l.userId})\n   🤖 Bot: ${l.botId}\n   📁 ${l.sourceFile} at ${time}\n\n`;
         }
         return api.sendMessage(msg, threadID, messageID);
     }
@@ -274,20 +319,22 @@ module.exports.run = async ({ api, event, args }) => {
         let msg = `📋 ERROR LOG (Last 20)\n━━━━━━━━━━━━━━━━━━━━\n`;
         const recent = errors.slice(-20).reverse();
         for (const e of recent) {
-            msg += `❌ ${e.name} (${e.userId})\n   📁 ${e.sourceFile}\n   ⚠️ ${e.error}\n   🕒 ${new Date(e.timestamp).toLocaleString()}\n\n`;
+            msg += `❌ ${e.name} (${e.userId})\n   🤖 Bot: ${e.botId}\n   📁 ${e.sourceFile}\n   ⚠️ ${e.error}\n   🕒 ${new Date(e.timestamp).toLocaleString()}\n\n`;
         }
         return api.sendMessage(msg, threadID, messageID);
     }
 
     // ========== LIST ==========
     if (cmd === "list") {
+        const botId = api.getCurrentUserID();
         const files = getSortedFiles();
         if (files.length === 0) return api.sendMessage("📁 No exported files found.", threadID, messageID);
-        let msg = `📁 EXPORTED FILES (Friend Status)\n━━━━━━━━━━━━━━━━━━━━\n📊 Total: ${files.length} files\n━━━━━━━━━━━━━━━━━━━━\n\n`;
+        let msg = `📁 EXPORTED FILES (Friend Status for Bot ${botId})\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        msg += `📊 Total: ${files.length} files\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             const data = loadFile(file);
-            const stats = getFileStats(file);
+            const stats = getFileStats(file, botId);
             const active = global.friendManager.jobs.has(file) ? "🟢" : "⚪";
             msg += `${i+1}. ${active} 📛 ${data.groupName || "Unknown"}\n   📦 ${file}\n   👥 Total: ${stats.total} | ✅ Friends: ${stats.friends} | ⏳ Req: ${stats.requested} | ⏰ Pending: ${stats.pending}\n   ───────────────────\n`;
         }
@@ -321,17 +368,18 @@ module.exports.run = async ({ api, event, args }) => {
         if (!target) return api.sendMessage("❌ Usage: /friends reset <file>", threadID, messageID);
         const filename = resolveFilename(target);
         if (!filename) return api.sendMessage("❌ Invalid file.", threadID, messageID);
-        resetFile(filename);
-        return api.sendMessage(`✅ Reset lastChecked for ${filename}.`, threadID, messageID);
+        resetFile(filename, api.getCurrentUserID());
+        return api.sendMessage(`✅ Reset lastChecked for current bot in ${filename}.`, threadID, messageID);
     }
 
     // ========== STATUS (interactive) ==========
-    if (cmd === "0" || cmd === "status") {
+    if (cmd === "status" || cmd === "0") {
+        const botId = api.getCurrentUserID();
         const files = getSortedFiles();
         const fileStats = [];
         let totalUsers = 0, totalFriends = 0, totalRequested = 0;
         for (const file of files) {
-            const stats = getFileStats(file);
+            const stats = getFileStats(file, botId);
             totalUsers += stats.total;
             totalFriends += stats.friends;
             totalRequested += stats.requested;
@@ -339,7 +387,7 @@ module.exports.run = async ({ api, event, args }) => {
         }
         const todayLogs = loadLogs(getTodayDate());
         const errors = JSON.parse(fs.readFileSync(errorsLogPath, 'utf8'));
-        let msg = `📊 FRIEND MANAGER STATUS\n━━━━━━━━━━━━━━━━━━━━\n`;
+        let msg = `📊 FRIEND MANAGER STATUS (Bot ${botId})\n━━━━━━━━━━━━━━━━━━━━\n`;
         msg += `👥 Total Users: ${totalUsers}\n✅ Friends: ${totalFriends}\n⏳ Req Sent: ${totalRequested}\n📅 Today: ${todayLogs.length}\n⚠️ Errors: ${errors.length}\n⏰ Pending: ${totalUsers - totalFriends - totalRequested}\n`;
         msg += `\n⚙️ ACTIVE JOBS:\n`;
         for (let i = 0; i < fileStats.length; i++) {
@@ -367,7 +415,7 @@ module.exports.run = async ({ api, event, args }) => {
     // ========== HELP ==========
     return api.sendMessage(
         `📖 FRIENDS COMMANDS\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `🔹 /friends list - Show all files\n` +
+        `🔹 /friends list - Show all files with stats for current bot\n` +
         `🔹 /friends start <file> [min]\n` +
         `🔹 /friends stop <file>\n` +
         `🔹 /friends reset <file>\n` +
@@ -378,7 +426,7 @@ module.exports.run = async ({ api, event, args }) => {
     );
 };
 
-// ========== HANDLE REPLY (only status_control) ==========
+// ========== HANDLE REPLY ==========
 module.exports.handleReply = async function({ api, event, handleReply }) {
     const { threadID, messageID, senderID, body } = event;
     const { author, type, files } = handleReply;
@@ -392,6 +440,7 @@ module.exports.handleReply = async function({ api, event, handleReply }) {
         return api.sendMessage("❌ Invalid file number.", threadID, messageID);
     }
     const targetFile = files[num - 1];
+    const botId = api.getCurrentUserID();
 
     if (action === "stop") {
         const stopped = stopJobForFile(targetFile);
@@ -399,8 +448,8 @@ module.exports.handleReply = async function({ api, event, handleReply }) {
     }
 
     if (action === "reset") {
-        resetFile(targetFile);
-        return api.sendMessage(`✅ Reset lastChecked for ${targetFile}.`, threadID, messageID);
+        resetFile(targetFile, botId);
+        return api.sendMessage(`✅ Reset lastChecked for current bot in ${targetFile}.`, threadID, messageID);
     }
 
     if (action === "timer") {
@@ -420,13 +469,16 @@ module.exports.handleReply = async function({ api, event, handleReply }) {
         const userNum = parseInt(parts[2]);
         if (isNaN(userNum)) return api.sendMessage("❌ Usage: remove <fileNum> <userNum>", threadID, messageID);
         const data = loadFile(targetFile);
-        const pending = data.members.filter(m => !m.isFriend && !m.requestSent);
+        const pending = data.members.filter(m => {
+            if (!m.bots || !m.bots[botId]) return true;
+            return !m.bots[botId].isFriend && !m.bots[botId].requestSent;
+        });
         if (userNum < 1 || userNum > pending.length) {
             return api.sendMessage(`❌ Invalid user number. Pending users: ${pending.length}`, threadID, messageID);
         }
         const user = pending[userNum - 1];
         removeUserFromFile(targetFile, user.id);
-        return api.sendMessage(`✅ Removed ${user.name} (${user.id}) from ${targetFile}.`, threadID, messageID);
+        return api.sendMessage(`✅ Removed ${user.name || user.id} from ${targetFile}.`, threadID, messageID);
     }
 
     return api.sendMessage("❌ Unknown action. Use: stop/reset/timer/remove", threadID, messageID);
