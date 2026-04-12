@@ -1,11 +1,11 @@
 module.exports.config = {
     name: "kick",
-    version: "2.5.0",
+    version: "2.6.0",
     hasPermssion: 1,
     credits: "MQL1 Community",
-    description: "Kick a member from the group by mention, reply, id, or name",
+    description: "Kick a member from the group by mention, reply, id, or name. Also supports self-kick with /kick me please",
     commandCategory: "Group",
-    usages: "@user / reply / id [ID] / name [name]",
+    usages: "@user / reply / id [ID] / name [name] / me please",
     cooldowns: 5
 };
 
@@ -33,17 +33,13 @@ module.exports.handleReply = async function ({ api, event, handleReply }) {
 module.exports.run = async function ({ api, event, Threads, args }) {
     const { threadID, messageID, senderID, type, mentions, body } = event;
     
-    // Check if user is admin
+    // Get thread info for permission and language
     const threadInfo = await api.getThreadInfo(threadID);
-    const isGroupAdmin = threadInfo.adminIDs.some(item => item.id == senderID);
-    const isSuperAdmin = global.config.ADMINBOT.includes(senderID);
-    const isBotAdmin = threadInfo.adminIDs.some(item => item.id == api.getCurrentUserID());
-    
-    // Get current language for this group
     const threadData = (await Threads.getData(threadID)).data || {};
     const lang = threadData.language || global.config.language || "en";
+    const isBotAdmin = threadInfo.adminIDs.some(item => item.id == api.getCurrentUserID());
     
-    // Language specific messages
+    // Language specific messages for normal kick
     const messages = {
         en: {
             self: "❌ You cannot kick yourself!",
@@ -84,8 +80,63 @@ module.exports.run = async function ({ api, event, Threads, args }) {
     };
     
     const msg = messages[lang] || messages.en;
+
+    // ========== SPECIAL: SELF-KICK WITH FUNNY MESSAGE ==========
+    if (args[0] === "me" && args[1] === "please") {
+        // Funny messages per language
+        const selfKickMessages = {
+            en: [
+                "👢 You have been kicked out with dishonor! The door hit you on the way out. 🚪💨",
+                "👟 You asked for it! Here's a gentle kick... just kidding, it's a hard one! Bye bye! 👋",
+                "🥾 You chose... poorly. Enjoy the void outside this group! 🌌",
+                "🦵 Boom! You just kicked yourself out. Literally. 🤣",
+                "🚪 The group has spoken (it was you). Farewell! 👋"
+            ],
+            bn: [
+                "👢 Latthi mere tomar opoman kore group theke bair kore deya holo! 🚪💨",
+                "👟 Tumi nijei chachcha! Ei naw ekta shobhabik kick... na na, eto jore dilam je ekhoni ure gelo! 😂",
+                "🥾 Tumi bhul shiddhanto niyecho. Ekhon group er baire ondhokare bhasho! 🌌",
+                "🦵 Dhum! Tumi nijeke nijei kick marla. Sotti kotha! 🤣",
+                "🚪 Group er shobar mot (mane tomar mot) tai tumi ekhon baire. Khoda Hafez! 👋"
+            ],
+            hi: [
+                "👢 Beizzati ke saath laat maarke tumhe group se nikal diya gaya! 🚪💨",
+                "👟 Tum khud maang rahe the! Yeh lo ek zor daar kick... mazaak tha, sach mein bahar phek diya! 👋",
+                "🥾 Tumne galat faisla liya. Ab group ke bahar andhere mein bhatko! 🌌",
+                "🦵 Dhamaka! Tumne khud ko hi kick maar diya. Sach mein! 🤣",
+                "🚪 Group ki rai (jo tumhari thi) ke mutabik tum bahar ho. Alvida! 👋"
+            ]
+        };
+        
+        const messagesList = selfKickMessages[lang] || selfKickMessages.en;
+        const randomMsg = messagesList[Math.floor(Math.random() * messagesList.length)];
+        
+        // Check if bot is admin (required to kick)
+        if (!isBotAdmin) {
+            return api.sendMessage(
+                lang === 'bn' ? "❌ Bot group admin na! Apnake kick korte parbe na. 😅" :
+                lang === 'hi' ? "❌ Bot group admin nahi hai! Aapko kick nahi kar sakta. 😅" :
+                "❌ Bot is not an admin! Cannot kick you. 😅",
+                threadID, messageID
+            );
+        }
+        
+        // Send funny message then kick
+        api.sendMessage(randomMsg, threadID, () => {
+            api.removeUserFromGroup(senderID, threadID, (err) => {
+                if (err) {
+                    console.error("Self-kick error:", err);
+                }
+            });
+        }, messageID);
+        return;
+    }
+
+    // ========== NORMAL KICK (ADMIN ONLY) ==========
+    const isGroupAdmin = threadInfo.adminIDs.some(item => item.id == senderID);
+    const isSuperAdmin = global.config.ADMINBOT.includes(senderID);
     
-    // Permission check
+    // Permission check for normal kick
     if (!isGroupAdmin && !isSuperAdmin) {
         return api.sendMessage(msg.no_permission, threadID, messageID);
     }
@@ -94,13 +145,11 @@ module.exports.run = async function ({ api, event, Threads, args }) {
     }
     
     // ========== BUILD LOCAL USER CACHE (ONE TIME SCAN) ==========
-    // This function scans all members once and returns a map for quick lookup
     async function buildUserCache(participantIDs, threadInfo) {
         const userCache = [];
         const botId = api.getCurrentUserID();
         
         for (const uid of participantIDs) {
-            // Skip bot and self
             if (uid == botId) continue;
             if (uid == senderID) continue;
             
@@ -111,7 +160,6 @@ module.exports.run = async function ({ api, event, Threads, args }) {
                 const userNickname = threadInfo.nicknames && threadInfo.nicknames[uid] ? threadInfo.nicknames[uid] : "";
                 const isAdmin = threadInfo.adminIDs.some(admin => admin.id == uid);
                 
-                // Skip admins (cannot kick)
                 if (isAdmin) continue;
                 
                 userCache.push({
@@ -146,18 +194,15 @@ module.exports.run = async function ({ api, event, Threads, args }) {
         return matchedUsers;
     }
     
-    // ========== BUILD CACHE ONCE (ONE TIME API CALLS FOR ALL MEMBERS) ==========
+    // ========== BUILD CACHE ONCE ==========
     const participants = threadInfo.participantIDs;
     
-    // Send typing indicator to show processing
     api.sendMessage("⏳ Searching for user...", threadID, (err, info) => {
-        // Optional: remove after 2 seconds
         setTimeout(() => {
             api.unsendMessage(info.messageID).catch(() => {});
         }, 2000);
     });
     
-    // Build cache (this makes ONE API call per member - but only once)
     const userCache = await buildUserCache(participants, threadInfo);
     
     // ========== KICK BY MENTION ==========
@@ -182,7 +227,6 @@ module.exports.run = async function ({ api, event, Threads, args }) {
             return api.sendMessage(msg.invalid, threadID, messageID);
         }
         
-        // Search in cache (local, no API calls)
         const matchedUsers = searchInCache(userCache, mentionName);
         
         if (matchedUsers.length === 0) {
@@ -200,7 +244,6 @@ module.exports.run = async function ({ api, event, Threads, args }) {
             return;
         }
         
-        // Multiple users found - show list
         let listMsg = "";
         for (let i = 0; i < matchedUsers.length; i++) {
             const user = matchedUsers[i];
@@ -276,7 +319,6 @@ module.exports.run = async function ({ api, event, Threads, args }) {
     if (args[0]) {
         const searchName = args.join(" ");
         
-        // Search in cache (local, no additional API calls)
         const matchedUsers = searchInCache(userCache, searchName);
         
         if (matchedUsers.length === 0) {
@@ -294,7 +336,6 @@ module.exports.run = async function ({ api, event, Threads, args }) {
             return;
         }
         
-        // Multiple users found - show list
         let listMsg = "";
         for (let i = 0; i < matchedUsers.length; i++) {
             const user = matchedUsers[i];
