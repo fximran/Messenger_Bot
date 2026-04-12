@@ -2,7 +2,7 @@ const fs = require("fs-extra");
 
 module.exports.config = {
     name: "setname",
-    version: "1.1.0",
+    version: "1.2.0",
     hasPermssion: 1,
     credits: "MQL1 Community",
     description: "Change group name, bot nickname, or member nickname",
@@ -51,6 +51,22 @@ module.exports.run = async function({ api, event, args, Threads }) {
 
     const messages = {
         en: {
+            help: `📖 SETNAME COMMANDS\n━━━━━━━━━━━━━━━━━━━━\n\n` +
+                  `👥 GROUP NAME:\n` +
+                  `   /setname g <name> - Change current group name\n` +
+                  `   /setname g <groupID> <name> - Change target group name\n\n` +
+                  `🤖 BOT NICKNAME:\n` +
+                  `   /setname bot <name> - Change bot nickname in current group\n` +
+                  `   /setname bot <groupID> <name> - Change bot nickname in target group\n\n` +
+                  `👤 MEMBER NICKNAME:\n` +
+                  `   /setname <UID> <nickname> - Change nickname by UID\n` +
+                  `   /setname <name> <nickname> - Change nickname by name search\n` +
+                  `   /setname @mention <nickname> - Change nickname by mention\n\n` +
+                  `💡 Examples:\n` +
+                  `   /setname g My Awesome Group\n` +
+                  `   /setname bot Jarvis 2.0\n` +
+                  `   /setname Imran Pro Trader\n` +
+                  `   /setname 100008446090941 Newbie`,
             missing_args: "❌ Missing arguments. Usage: /setname g [groupID] <name> | bot [groupID] <name> | @mention/uid/name <nickname>",
             group_not_found: "❌ Bot is not in the specified group or group doesn't exist!",
             not_admin: "❌ You must be a group admin to change the group name!",
@@ -73,6 +89,22 @@ module.exports.run = async function({ api, event, args, Threads }) {
             searching: "⏳ Searching for user..."
         },
         bn: {
+            help: `📖 SETNAME COMMANDS\n━━━━━━━━━━━━━━━━━━━━\n\n` +
+                  `👥 GROUP ER NAAM:\n` +
+                  `   /setname g <name> - Current group er naam poriborton\n` +
+                  `   /setname g <groupID> <name> - Target group er naam poriborton\n\n` +
+                  `🤖 BOT ER NICKNAME:\n` +
+                  `   /setname bot <name> - Current group e bot er nickname\n` +
+                  `   /setname bot <groupID> <name> - Target group e bot er nickname\n\n` +
+                  `👤 MEMBER ER NICKNAME:\n` +
+                  `   /setname <UID> <nickname> - UID diye nickname set\n` +
+                  `   /setname <name> <nickname> - Nam diye khuje nickname set\n` +
+                  `   /setname @mention <nickname> - Mention diye nickname set\n\n` +
+                  `💡 Udhahoron:\n` +
+                  `   /setname g Amar Groop\n` +
+                  `   /setname bot Jarvis 2.0\n` +
+                  `   /setname Imran Pro Trader\n` +
+                  `   /setname 100008446090941 Newbie`,
             missing_args: "❌ Argumment missing. Babohar: /setname g [groupID] <name> | bot [groupID] <name> | @mention/uid/name <nickname>",
             group_not_found: "❌ Bot oi groope nei ba groop ti nei!",
             not_admin: "❌ Group er naam poriborton korte apnake group admin hote hobe!",
@@ -95,6 +127,22 @@ module.exports.run = async function({ api, event, args, Threads }) {
             searching: "⏳ User khujchi..."
         },
         hi: {
+            help: `📖 SETNAME COMMANDS\n━━━━━━━━━━━━━━━━━━━━\n\n` +
+                  `👥 GROUP KA NAAM:\n` +
+                  `   /setname g <name> - Current group ka naam badle\n` +
+                  `   /setname g <groupID> <name> - Target group ka naam badle\n\n` +
+                  `🤖 BOT KA NICKNAME:\n` +
+                  `   /setname bot <name> - Current group mein bot ka nickname\n` +
+                  `   /setname bot <groupID> <name> - Target group mein bot ka nickname\n\n` +
+                  `👤 MEMBER KA NICKNAME:\n` +
+                  `   /setname <UID> <nickname> - UID se nickname set karein\n` +
+                  `   /setname <name> <nickname> - Naam dhundhkar nickname set karein\n` +
+                  `   /setname @mention <nickname> - Mention se nickname set karein\n\n` +
+                  `💡 Udaharan:\n` +
+                  `   /setname g Mera Group\n` +
+                  `   /setname bot Jarvis 2.0\n` +
+                  `   /setname Imran Pro Trader\n` +
+                  `   /setname 100008446090941 Newbie`,
             missing_args: "❌ Arguments missing. Upyog: /setname g [groupID] <name> | bot [groupID] <name> | @mention/uid/name <nickname>",
             group_not_found: "❌ Bot us group mein nahi hai ya group maujood nahi hai!",
             not_admin: "❌ Group ka naam badalne ke liye aapko group admin hona chahiye!",
@@ -119,8 +167,9 @@ module.exports.run = async function({ api, event, args, Threads }) {
     };
     const msg = messages[lang] || messages.en;
 
+    // ========== HELP MENU (no arguments) ==========
     if (!args[0]) {
-        return api.sendMessage(msg.missing_args, threadID, messageID);
+        return api.sendMessage(msg.help, threadID, messageID);
     }
 
     const subCmd = args[0].toLowerCase();
@@ -197,7 +246,7 @@ module.exports.run = async function({ api, event, args, Threads }) {
         }
 
         const targetInfo = await getTargetThread(targetID);
-        if (!target01) return api.sendMessage(msg.group_not_found, threadID, messageID);
+        if (!targetInfo) return api.sendMessage(msg.group_not_found, threadID, messageID);
 
         const isUserAdmin = targetInfo.adminIDs.some(item => item.id == senderID);
         const isBotAdmin = targetInfo.adminIDs.some(item => item.id == botID);
@@ -236,7 +285,7 @@ module.exports.run = async function({ api, event, args, Threads }) {
         return api.sendMessage(msg.no_bot_admin, threadID, messageID);
     }
 
-    // Build user cache (similar to kick)
+    // Build user cache
     async function buildUserCache(participantIDs, threadInfo) {
         const userCache = [];
         for (const uid of participantIDs) {
@@ -277,17 +326,14 @@ module.exports.run = async function({ api, event, args, Threads }) {
         return matchedUsers;
     }
 
-    // Determine if we are using UID or name
     let targetUserID = null;
     let targetUserName = "";
     let nickname = "";
-    let isUidMode = false;
 
     // Check for direct UID
     if (restArgs[0] && /^\d+$/.test(restArgs[0])) {
         targetUserID = restArgs[0];
         nickname = restArgs.slice(1).join(" ").trim();
-        isUidMode = true;
         try {
             const userInfo = await api.getUserInfo(targetUserID);
             targetUserName = userInfo[targetUserID].name;
@@ -295,15 +341,9 @@ module.exports.run = async function({ api, event, args, Threads }) {
             targetUserName = targetUserID;
         }
     } else {
-        // Name mode: need to extract name and nickname
-        // The format is: /setname <searchName> <nickname>
-        // We need to guess where the name ends and nickname begins.
-        // We'll use the cache to find the best match.
         const participants = threadInfo.participantIDs;
         const userCache = await buildUserCache(participants, threadInfo);
         
-        // Try to find the longest matching name prefix
-        // Since nickname can contain spaces, we iterate from the end to find the split
         let searchName = "";
         let foundNickname = "";
         let matchedUsers = [];
@@ -322,15 +362,10 @@ module.exports.run = async function({ api, event, args, Threads }) {
             }
         }
         
-        // If no split found, treat whole restArgs as search name and nickname empty? No, nickname must be provided.
-        if (matchedUsers.length === 0) {
-            // If only one word provided? Actually we need at least two parts: search and nickname.
-            if (restArgs.length >= 2) {
-                // Fallback: first word is search, rest is nickname
-                searchName = restArgs[0];
-                foundNickname = restArgs.slice(1).join(" ");
-                matchedUsers = searchInCache(userCache, searchName);
-            }
+        if (matchedUsers.length === 0 && restArgs.length >= 2) {
+            searchName = restArgs[0];
+            foundNickname = restArgs.slice(1).join(" ");
+            matchedUsers = searchInCache(userCache, searchName);
         }
         
         if (!foundNickname) {
@@ -346,7 +381,6 @@ module.exports.run = async function({ api, event, args, Threads }) {
             targetUserID = matchedUsers[0].id;
             targetUserName = matchedUsers[0].name;
         } else {
-            // Multiple matches: show list and wait for reply
             let listMsg = "";
             for (let i = 0; i < matchedUsers.length; i++) {
                 const user = matchedUsers[i];
@@ -378,7 +412,6 @@ module.exports.run = async function({ api, event, args, Threads }) {
         }
     }
 
-    // If we reached here, we have a single targetUserID
     if (!nickname) {
         return api.sendMessage(msg.missing_args, threadID, messageID);
     }
