@@ -3,12 +3,12 @@ const path = require("path");
 
 module.exports.config = {
     name: "friends",
-    version: "4.0.0",
+    version: "5.1.0",
     hasPermssion: 2,
     credits: "MQL1 Community",
-    description: "Auto send friend requests with multi-bot support and auto-remove on failure",
+    description: "Smart friend request automation with separate check and request intervals",
     commandCategory: "Admin",
-    usages: "list | start <file> [min] | stop <file> | reset <file> | status | report [date] | errors",
+    usages: "list | start <file> [reqMin] [checkMin] | stop <file> | status | reset <file> | report [date] | errors",
     cooldowns: 5
 };
 
@@ -21,55 +21,14 @@ if (!fs.existsSync(boxExportPath)) fs.mkdirSync(boxExportPath, { recursive: true
 if (!fs.existsSync(logsPath)) fs.mkdirSync(logsPath, { recursive: true });
 if (!fs.existsSync(errorsLogPath)) fs.writeFileSync(errorsLogPath, JSON.stringify([]));
 
-// Global state
+// Global state for jobs (per file)
 if (!global.friendManager) {
     global.friendManager = {
-        jobs: new Map(),
-        sentThisSession: new Set()
+        jobs: new Map() // filename -> { checkIntervalId, requestIntervalId, checkMinutes, requestMinutes, running }
     };
 }
 
 // ========== HELPERS ==========
-function getTodayDate() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function getLogPath(date) {
-    return path.join(logsPath, `${date}.json`);
-}
-
-function loadLogs(date) {
-    const p = getLogPath(date);
-    if (!fs.existsSync(p)) return [];
-    return JSON.parse(fs.readFileSync(p, 'utf8'));
-}
-
-function saveLogs(date, logs) {
-    fs.writeFileSync(getLogPath(date), JSON.stringify(logs, null, 2));
-}
-
-function addLogEntry(userId, name, sourceFile, botId) {
-    const date = getTodayDate();
-    const logs = loadLogs(date);
-    logs.push({ timestamp: Date.now(), userId, name, sourceFile, botId });
-    saveLogs(date, logs);
-}
-
-function addErrorEntry(userId, name, sourceFile, errorMsg, botId) {
-    const errors = JSON.parse(fs.readFileSync(errorsLogPath, 'utf8'));
-    errors.push({
-        timestamp: Date.now(),
-        userId,
-        name: name || "Unknown",
-        sourceFile,
-        error: errorMsg,
-        botId
-    });
-    if (errors.length > 100) errors.shift();
-    fs.writeFileSync(errorsLogPath, JSON.stringify(errors, null, 2));
-}
-
 function getSortedFiles() {
     return fs.readdirSync(boxExportPath)
         .filter(f => f.endsWith('.json'))
@@ -96,7 +55,53 @@ function saveFile(filename, data) {
     fs.writeFileSync(path.join(boxExportPath, filename), JSON.stringify(data, null, 2));
 }
 
-function removeUserFromFile(filename, userId) {
+// Migrate old member format to multi-bot format
+function migrateMember(member, botId) {
+    if (!member.bots) {
+        member.bots = {};
+        if (member.hasOwnProperty('isFriend') || member.hasOwnProperty('requestSent')) {
+            member.bots[botId] = {
+                isFriend: member.isFriend || false,
+                requestSent: member.requestSent || false,
+                lastChecked: member.lastChecked || null
+            };
+        }
+        delete member.isFriend;
+        delete member.requestSent;
+        delete member.lastChecked;
+    }
+    if (!member.bots[botId]) {
+        member.bots[botId] = { isFriend: false, requestSent: false, lastChecked: null };
+    }
+}
+
+// Check if member should be skipped for REQUEST
+function shouldSkipForRequest(member, botId) {
+    const botData = member.bots[botId];
+    if (!botData) return false;
+    if (botData.isFriend) return true;
+    if (botData.requestSent) return true;
+    // 5-day cooldown for checking? We'll apply to request as well
+    if (botData.lastChecked) {
+        const fiveDaysMs = 5 * 24 * 60 * 60 * 1000;
+        if (Date.now() - botData.lastChecked < fiveDaysMs) return true;
+    }
+    return false;
+}
+
+// Check if member is already friend or requested by ANY bot (but not current)
+function isProcessedByOtherBot(member, currentBotId) {
+    if (!member.bots) return false;
+    for (const [botId, data] of Object.entries(member.bots)) {
+        if (botId !== currentBotId && (data.isFriend || data.requestSent)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Remove member from file
+function removeMemberFromFile(filename, userId) {
     const data = loadFile(filename);
     const before = data.members.length;
     data.members = data.members.filter(m => m.id !== userId);
@@ -108,163 +113,158 @@ function removeUserFromFile(filename, userId) {
     return false;
 }
 
-// Migrate old format to new multi-bot format
-function migrateMember(member, botId) {
-    if (!member.bots) {
-        // Old format: { id, name, isFriend, requestSent, lastChecked }
-        member.bots = {};
-        if (typeof member.isFriend !== 'undefined' || typeof member.requestSent !== 'undefined') {
-            member.bots[botId] = {
-                isFriend: member.isFriend || false,
-                requestSent: member.requestSent || false,
-                lastChecked: member.lastChecked || null
-            };
-        }
-        delete member.isFriend;
-        delete member.requestSent;
-        delete member.lastChecked;
-    }
-    // Ensure current bot has an entry
-    if (!member.bots[botId]) {
-        member.bots[botId] = { isFriend: false, requestSent: false, lastChecked: null };
-    }
-}
-
-// Scan file: migrate, update names, check friend status for current bot
-async function scanFile(api, filename) {
-    const botId = api.getCurrentUserID();
+// Update member after successful request
+function updateMemberAfterRequest(filename, userId, botId) {
     const data = loadFile(filename);
-    let changed = false;
-    for (const member of data.members) {
+    const member = data.members.find(m => m.id === userId);
+    if (member) {
         migrateMember(member, botId);
-        const botData = member.bots[botId];
-        // Update name if missing
-        if (!member.name) {
-            try {
-                const info = await api.getUserInfo(member.id);
-                member.name = info[member.id]?.name || "Unknown";
-                changed = true;
-            } catch(e) {}
-        }
-        // Update friend status if not already friend
-        if (!botData.isFriend) {
-            try {
-                const info = await api.getUserInfo(member.id);
-                const isFriendNow = info[member.id]?.isFriend || false;
-                if (isFriendNow !== botData.isFriend) {
-                    botData.isFriend = isFriendNow;
-                    if (isFriendNow) botData.requestSent = false;
-                    botData.lastChecked = Date.now();
-                    changed = true;
-                }
-            } catch(e) {}
-        }
+        member.bots[botId].requestSent = true;
+        member.bots[botId].lastChecked = Date.now();
+        saveFile(filename, data);
     }
-    if (changed) saveFile(filename, data);
 }
 
-// Process file: send one request for current bot
-async function processFile(api, filename) {
+// ========== CYCLE FUNCTIONS ==========
+
+// Check cycle: update friend status for members with pending requests
+async function checkCycle(api, filename) {
     const botId = api.getCurrentUserID();
     const data = loadFile(filename);
     let changed = false;
 
-    // 1. Update friend status for current bot
-    for (const member of data.members) {
-        migrateMember(member, botId);
-        const botData = member.bots[botId];
-        if (!botData.isFriend) {
-            try {
-                const info = await api.getUserInfo(member.id);
+    // Collect members that have requestSent but not isFriend
+    const pendingMembers = data.members.filter(m => {
+        if (!m.bots || !m.bots[botId]) return false;
+        return m.bots[botId].requestSent && !m.bots[botId].isFriend;
+    });
+
+    if (pendingMembers.length === 0) return;
+
+    // Batch get user info for all pending members (max 50 per batch to be safe)
+    const batchSize = 50;
+    for (let i = 0; i < pendingMembers.length; i += batchSize) {
+        const batch = pendingMembers.slice(i, i + batchSize);
+        const ids = batch.map(m => m.id);
+        try {
+            const info = await api.getUserInfo(ids);
+            for (const member of batch) {
                 const isFriendNow = info[member.id]?.isFriend || false;
-                if (isFriendNow !== botData.isFriend) {
-                    botData.isFriend = isFriendNow;
-                    if (isFriendNow) botData.requestSent = false;
-                    botData.lastChecked = Date.now();
+                if (isFriendNow && !member.bots[botId].isFriend) {
+                    member.bots[botId].isFriend = true;
+                    member.bots[botId].lastChecked = Date.now();
                     changed = true;
-                }
-                if (!member.name && info[member.id]?.name) {
-                    member.name = info[member.id].name;
-                    changed = true;
-                }
-            } catch(e) {}
-        }
-    }
-
-    // 2. Send one request
-    // Priority 1: Users with no request from current bot and not friend
-    // Priority 2: If all are already requested/friend, pick any pending for current bot anyway
-    for (const member of data.members) {
-        migrateMember(member, botId);
-        const botData = member.bots[botId];
-        if (!botData.isFriend && !botData.requestSent && !global.friendManager.sentThisSession.has(member.id)) {
-            let userName = member.name;
-            if (!userName) {
-                try {
-                    const info = await api.getUserInfo(member.id);
-                    userName = info[member.id]?.name || "Unknown";
-                    member.name = userName;
-                    changed = true;
-                } catch(e) {
-                    userName = "Unknown";
+                    console.log(`[Friends] Bot ${botId}: ${member.id} is now a friend.`);
                 }
             }
-
-            try {
-                await api.sendFriendRequest(member.id);
-                botData.requestSent = true;
-                botData.lastChecked = Date.now();
-                global.friendManager.sentThisSession.add(member.id);
-                changed = true;
-                addLogEntry(member.id, userName, filename, botId);
-                console.log(`[Friends] Bot ${botId} sent to ${userName} (${member.id}) from ${filename}`);
-                break;
-            } catch(e) {
-                let errorMsg = e.message || String(e);
-                if (e.error) errorMsg = e.error;
-                if (e.errorDescription) errorMsg = e.errorDescription;
-                console.error(`[Friends] Bot ${botId} failed to send to ${member.id}:`, errorMsg);
-                addErrorEntry(member.id, userName, filename, errorMsg, botId);
-                removeUserFromFile(filename, member.id);
-                console.log(`[Friends] Removed failed user ${member.id} from ${filename}`);
-                break;
-            }
+        } catch(e) {
+            console.error(`[Friends] Check batch error:`, e);
         }
     }
 
     if (changed) saveFile(filename, data);
 }
 
-function startJobForFile(api, filename, minutes) {
-    if (global.friendManager.jobs.has(filename)) stopJobForFile(filename);
-    const intervalId = setInterval(() => {
-        global.friendManager.sentThisSession.clear();
-        processFile(api, filename);
-    }, minutes * 60 * 1000);
-    global.friendManager.jobs.set(filename, { running: true, intervalId, intervalMinutes: minutes });
-    processFile(api, filename);
+// Request cycle: send one friend request
+async function requestCycle(api, filename) {
+    const botId = api.getCurrentUserID();
+    const data = loadFile(filename);
+
+    // Ensure all members have bot entry
+    for (const member of data.members) {
+        migrateMember(member, botId);
+    }
+
+    // Phase 1: Primary candidates (not skipped)
+    for (const member of data.members) {
+        if (!shouldSkipForRequest(member, botId)) {
+            await sendRequestForMember(api, filename, member, botId);
+            return;
+        }
+    }
+
+    // Phase 2: Secondary candidates (processed by other bots)
+    for (const member of data.members) {
+        migrateMember(member, botId);
+        if (member.bots[botId]?.isFriend) continue;
+        if (member.bots[botId]?.requestSent) continue;
+        if (!isProcessedByOtherBot(member, botId)) continue;
+        await sendRequestForMember(api, filename, member, botId);
+        return;
+    }
+
+    console.log(`[Friends] No candidates in ${filename} for bot ${botId}`);
+}
+
+async function sendRequestForMember(api, filename, member, botId) {
+    try {
+        await api.sendFriendRequest(member.id);
+        updateMemberAfterRequest(filename, member.id, botId);
+        addLogEntry(member.id, filename, botId);
+        console.log(`[Friends] Bot ${botId} sent request to ${member.id} from ${filename}`);
+    } catch(e) {
+        let errorMsg = e.message || String(e);
+        if (e.error) errorMsg = e.error;
+        if (e.errorDescription) errorMsg = e.errorDescription;
+        console.error(`[Friends] Bot ${botId} failed to send to ${member.id}:`, errorMsg);
+        addErrorEntry(member.id, filename, errorMsg, botId);
+        removeMemberFromFile(filename, member.id);
+        console.log(`[Friends] Removed failed user ${member.id} from ${filename}`);
+    }
+}
+
+// ========== LOGGING ==========
+function getTodayDate() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function addLogEntry(userId, sourceFile, botId) {
+    const date = getTodayDate();
+    const logPath = path.join(logsPath, `${date}.json`);
+    const logs = fs.existsSync(logPath) ? JSON.parse(fs.readFileSync(logPath, 'utf8')) : [];
+    logs.push({ timestamp: Date.now(), userId, sourceFile, botId });
+    fs.writeFileSync(logPath, JSON.stringify(logs, null, 2));
+}
+
+function addErrorEntry(userId, sourceFile, errorMsg, botId) {
+    const errors = JSON.parse(fs.readFileSync(errorsLogPath, 'utf8'));
+    errors.push({ timestamp: Date.now(), userId, sourceFile, error: errorMsg, botId });
+    if (errors.length > 100) errors.shift();
+    fs.writeFileSync(errorsLogPath, JSON.stringify(errors, null, 2));
+}
+
+// ========== JOB CONTROL ==========
+function startJobForFile(api, filename, requestMinutes, checkMinutes) {
+    if (global.friendManager.jobs.has(filename)) {
+        stopJobForFile(filename);
+    }
+    const checkIntervalId = setInterval(() => checkCycle(api, filename), checkMinutes * 60 * 1000);
+    const requestIntervalId = setInterval(() => requestCycle(api, filename), requestMinutes * 60 * 1000);
+    global.friendManager.jobs.set(filename, {
+        checkIntervalId,
+        requestIntervalId,
+        checkMinutes,
+        requestMinutes,
+        running: true
+    });
+    // Run check immediately, then request after a short delay (to avoid overlap)
+    checkCycle(api, filename);
+    setTimeout(() => requestCycle(api, filename), 5000);
 }
 
 function stopJobForFile(filename) {
     const job = global.friendManager.jobs.get(filename);
     if (job) {
-        clearInterval(job.intervalId);
+        clearInterval(job.checkIntervalId);
+        clearInterval(job.requestIntervalId);
         global.friendManager.jobs.delete(filename);
         return true;
     }
     return false;
 }
 
-function resetFile(filename, botId) {
-    const data = loadFile(filename);
-    for (const member of data.members) {
-        if (member.bots && member.bots[botId]) {
-            member.bots[botId].lastChecked = null;
-        }
-    }
-    saveFile(filename, data);
-}
-
+// Statistics for current bot
 function getFileStats(filename, botId) {
     const data = loadFile(filename);
     let total = data.members.length;
@@ -286,24 +286,95 @@ module.exports.run = async ({ api, event, args }) => {
 
     const cmd = args[0]?.toLowerCase();
     const target = args[1];
-    const option = args[2];
+    const opt1 = args[2];
+    const opt2 = args[3];
+
+    // ========== LIST ==========
+    if (cmd === "list") {
+        const botId = api.getCurrentUserID();
+        const files = getSortedFiles();
+        if (files.length === 0) return api.sendMessage("📁 No exported files found.", threadID, messageID);
+        let msg = `📁 EXPORTED FILES (Bot ${botId})\n━━━━━━━━━━━━━━━━━━━━\n`;
+        msg += `📊 Total: ${files.length} files\n━━━━━━━━━━━━━━━━━━━━\n\n`;
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const data = loadFile(file);
+            const stats = getFileStats(file, botId);
+            const active = global.friendManager.jobs.has(file) ? "🟢" : "⚪";
+            msg += `${i+1}. ${active} 📛 ${data.groupName || "Unknown"}\n   📦 ${file}\n   👥 Total: ${stats.total} | ✅ Friends: ${stats.friends} | ⏳ Req: ${stats.requested} | ⏰ Pending: ${stats.pending}\n   ───────────────────\n`;
+        }
+        msg += `\n💡 /friends start <number> [reqMin] [checkMin]`;
+        return api.sendMessage(msg, threadID, messageID);
+    }
+
+    // ========== START ==========
+    if (cmd === "start") {
+        if (!target) return api.sendMessage("❌ Usage: /friends start <file> [reqMinutes] [checkMinutes]", threadID, messageID);
+        const filename = resolveFilename(target);
+        if (!filename) return api.sendMessage("❌ Invalid file number or filename.", threadID, messageID);
+        const requestMinutes = parseInt(opt1) || 15;
+        const checkMinutes = parseInt(opt2) || 5;
+        if (requestMinutes < 1 || requestMinutes > 1440) return api.sendMessage("❌ Request minutes 1-1440.", threadID, messageID);
+        if (checkMinutes < 1 || checkMinutes > 1440) return api.sendMessage("❌ Check minutes 1-1440.", threadID, messageID);
+        
+        startJobForFile(api, filename, requestMinutes, checkMinutes);
+        return api.sendMessage(`✅ Started ${filename}\n📤 Request: every ${requestMinutes} min\n🔍 Check: every ${checkMinutes} min`, threadID, messageID);
+    }
+
+    // ========== STOP ==========
+    if (cmd === "stop") {
+        if (!target) return api.sendMessage("❌ Usage: /friends stop <file>", threadID, messageID);
+        const filename = resolveFilename(target);
+        if (!filename) return api.sendMessage("❌ Invalid file.", threadID, messageID);
+        const stopped = stopJobForFile(filename);
+        return api.sendMessage(stopped ? `✅ Stopped ${filename}.` : `⚠️ Not running.`, threadID, messageID);
+    }
+
+    // ========== STATUS ==========
+    if (cmd === "status") {
+        const botId = api.getCurrentUserID();
+        const jobs = Array.from(global.friendManager.jobs.entries());
+        let msg = `📊 FRIEND MANAGER STATUS (Bot ${botId})\n━━━━━━━━━━━━━━━━━━━━\n`;
+        if (jobs.length === 0) {
+            msg += `No active jobs.`;
+        } else {
+            for (const [file, job] of jobs) {
+                msg += `🟢 ${file}\n   📤 Request: ${job.requestMinutes} min\n   🔍 Check: ${job.checkMinutes} min\n`;
+            }
+        }
+        return api.sendMessage(msg, threadID, messageID);
+    }
+
+    // ========== RESET ==========
+    if (cmd === "reset") {
+        if (!target) return api.sendMessage("❌ Usage: /friends reset <file>", threadID, messageID);
+        const filename = resolveFilename(target);
+        if (!filename) return api.sendMessage("❌ Invalid file.", threadID, messageID);
+        const data = loadFile(filename);
+        const botId = api.getCurrentUserID();
+        for (const m of data.members) {
+            if (m.bots && m.bots[botId]) {
+                m.bots[botId].lastChecked = null;
+                m.bots[botId].requestSent = false;
+            }
+        }
+        saveFile(filename, data);
+        return api.sendMessage(`✅ Reset state for current bot in ${filename}.`, threadID, messageID);
+    }
 
     // ========== REPORT ==========
     if (cmd === "report") {
         let date = target;
         if (!date) date = getTodayDate();
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-            return api.sendMessage("❌ Invalid date format. Use YYYY-MM-DD", threadID, messageID);
-        }
-        const logs = loadLogs(date);
-        if (logs.length === 0) {
-            return api.sendMessage(`📋 No friend requests sent on ${date}.`, threadID, messageID);
-        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return api.sendMessage("❌ Invalid date format. Use YYYY-MM-DD", threadID, messageID);
+        const logPath = path.join(logsPath, `${date}.json`);
+        if (!fs.existsSync(logPath)) return api.sendMessage(`📋 No requests sent on ${date}.`, threadID, messageID);
+        const logs = JSON.parse(fs.readFileSync(logPath, 'utf8'));
         let msg = `📋 REPORT - ${date}\n━━━━━━━━━━━━━━━━━━━━\n📊 Total Sent: ${logs.length}\n\n`;
         for (let i = 0; i < logs.length; i++) {
             const l = logs[i];
             const time = new Date(l.timestamp).toLocaleTimeString();
-            msg += `${i+1}. ${l.name} (${l.userId})\n   🤖 Bot: ${l.botId}\n   📁 ${l.sourceFile} at ${time}\n\n`;
+            msg += `${i+1}. ${l.userId}\n   🤖 Bot: ${l.botId}\n   📁 ${l.sourceFile} at ${time}\n\n`;
         }
         return api.sendMessage(msg, threadID, messageID);
     }
@@ -319,167 +390,21 @@ module.exports.run = async ({ api, event, args }) => {
         let msg = `📋 ERROR LOG (Last 20)\n━━━━━━━━━━━━━━━━━━━━\n`;
         const recent = errors.slice(-20).reverse();
         for (const e of recent) {
-            msg += `❌ ${e.name} (${e.userId})\n   🤖 Bot: ${e.botId}\n   📁 ${e.sourceFile}\n   ⚠️ ${e.error}\n   🕒 ${new Date(e.timestamp).toLocaleString()}\n\n`;
+            msg += `❌ ${e.userId}\n   🤖 Bot: ${e.botId}\n   📁 ${e.sourceFile}\n   ⚠️ ${e.error}\n   🕒 ${new Date(e.timestamp).toLocaleString()}\n\n`;
         }
         return api.sendMessage(msg, threadID, messageID);
-    }
-
-    // ========== LIST ==========
-    if (cmd === "list") {
-        const botId = api.getCurrentUserID();
-        const files = getSortedFiles();
-        if (files.length === 0) return api.sendMessage("📁 No exported files found.", threadID, messageID);
-        let msg = `📁 EXPORTED FILES (Friend Status for Bot ${botId})\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-        msg += `📊 Total: ${files.length} files\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const data = loadFile(file);
-            const stats = getFileStats(file, botId);
-            const active = global.friendManager.jobs.has(file) ? "🟢" : "⚪";
-            msg += `${i+1}. ${active} 📛 ${data.groupName || "Unknown"}\n   📦 ${file}\n   👥 Total: ${stats.total} | ✅ Friends: ${stats.friends} | ⏳ Req: ${stats.requested} | ⏰ Pending: ${stats.pending}\n   ───────────────────\n`;
-        }
-        msg += `\n💡 /friends start <number> [min]`;
-        return api.sendMessage(msg, threadID, messageID);
-    }
-
-    // ========== START ==========
-    if (cmd === "start") {
-        if (!target) return api.sendMessage("❌ Usage: /friends start <file> [minutes]", threadID, messageID);
-        const filename = resolveFilename(target);
-        if (!filename) return api.sendMessage("❌ Invalid file.", threadID, messageID);
-        const minutes = parseInt(option) || 15;
-        if (minutes < 1 || minutes > 1440) return api.sendMessage("❌ Minutes 1-1440.", threadID, messageID);
-        await scanFile(api, filename);
-        startJobForFile(api, filename, minutes);
-        return api.sendMessage(`✅ Started ${filename} (every ${minutes} min).`, threadID, messageID);
-    }
-
-    // ========== STOP ==========
-    if (cmd === "stop") {
-        if (!target) return api.sendMessage("❌ Usage: /friends stop <file>", threadID, messageID);
-        const filename = resolveFilename(target);
-        if (!filename) return api.sendMessage("❌ Invalid file.", threadID, messageID);
-        const stopped = stopJobForFile(filename);
-        return api.sendMessage(stopped ? `✅ Stopped ${filename}.` : `⚠️ Not running.`, threadID, messageID);
-    }
-
-    // ========== RESET ==========
-    if (cmd === "reset") {
-        if (!target) return api.sendMessage("❌ Usage: /friends reset <file>", threadID, messageID);
-        const filename = resolveFilename(target);
-        if (!filename) return api.sendMessage("❌ Invalid file.", threadID, messageID);
-        resetFile(filename, api.getCurrentUserID());
-        return api.sendMessage(`✅ Reset lastChecked for current bot in ${filename}.`, threadID, messageID);
-    }
-
-    // ========== STATUS (interactive) ==========
-    if (cmd === "status" || cmd === "0") {
-        const botId = api.getCurrentUserID();
-        const files = getSortedFiles();
-        const fileStats = [];
-        let totalUsers = 0, totalFriends = 0, totalRequested = 0;
-        for (const file of files) {
-            const stats = getFileStats(file, botId);
-            totalUsers += stats.total;
-            totalFriends += stats.friends;
-            totalRequested += stats.requested;
-            fileStats.push({ file, stats, active: global.friendManager.jobs.has(file) });
-        }
-        const todayLogs = loadLogs(getTodayDate());
-        const errors = JSON.parse(fs.readFileSync(errorsLogPath, 'utf8'));
-        let msg = `📊 FRIEND MANAGER STATUS (Bot ${botId})\n━━━━━━━━━━━━━━━━━━━━\n`;
-        msg += `👥 Total Users: ${totalUsers}\n✅ Friends: ${totalFriends}\n⏳ Req Sent: ${totalRequested}\n📅 Today: ${todayLogs.length}\n⚠️ Errors: ${errors.length}\n⏰ Pending: ${totalUsers - totalFriends - totalRequested}\n`;
-        msg += `\n⚙️ ACTIVE JOBS:\n`;
-        for (let i = 0; i < fileStats.length; i++) {
-            const f = fileStats[i];
-            if (f.active) {
-                const job = global.friendManager.jobs.get(f.file);
-                msg += `   ${i+1}. ${f.file} (${job.intervalMinutes} min)\n`;
-            }
-        }
-        msg += `\n💡 Reply with:\n   stop <number> - Stop a job\n   reset <number> - Reset lastChecked\n   timer <number> <min> - Change interval\n   remove <fileNum> <userNum> - Delete pending user`;
-        return api.sendMessage(msg, threadID, (err, info) => {
-            if (!err) {
-                global.client.handleReply.push({
-                    name: this.config.name,
-                    messageID: info.messageID,
-                    author: senderID,
-                    type: "status_control",
-                    fileStats,
-                    files
-                });
-            }
-        }, messageID);
     }
 
     // ========== HELP ==========
     return api.sendMessage(
         `📖 FRIENDS COMMANDS\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `🔹 /friends list - Show all files with stats for current bot\n` +
-        `🔹 /friends start <file> [min]\n` +
-        `🔹 /friends stop <file>\n` +
-        `🔹 /friends reset <file>\n` +
-        `🔹 /friends status - Interactive control\n` +
-        `🔹 /friends report [date]\n` +
-        `🔹 /friends errors [clear]`,
+        `🔹 /friends list - Show all exported files with stats\n` +
+        `🔹 /friends start <file> [reqMin] [checkMin] - Start (default req 15, check 5)\n` +
+        `🔹 /friends stop <file> - Stop automation\n` +
+        `🔹 /friends status - Show running jobs\n` +
+        `🔹 /friends reset <file> - Reset requestSent/lastChecked\n` +
+        `🔹 /friends report [date] - Show sent requests\n` +
+        `🔹 /friends errors [clear] - Show/clear error log`,
         threadID, messageID
     );
-};
-
-// ========== HANDLE REPLY ==========
-module.exports.handleReply = async function({ api, event, handleReply }) {
-    const { threadID, messageID, senderID, body } = event;
-    const { author, type, files } = handleReply;
-    if (senderID != author) return;
-
-    if (type !== "status_control") return;
-    const parts = body.toLowerCase().trim().split(/\s+/);
-    const action = parts[0];
-    const num = parseInt(parts[1]);
-    if (isNaN(num) || num < 1 || num > files.length) {
-        return api.sendMessage("❌ Invalid file number.", threadID, messageID);
-    }
-    const targetFile = files[num - 1];
-    const botId = api.getCurrentUserID();
-
-    if (action === "stop") {
-        const stopped = stopJobForFile(targetFile);
-        return api.sendMessage(stopped ? `✅ Stopped ${targetFile}.` : `⚠️ Not running.`, threadID, messageID);
-    }
-
-    if (action === "reset") {
-        resetFile(targetFile, botId);
-        return api.sendMessage(`✅ Reset lastChecked for current bot in ${targetFile}.`, threadID, messageID);
-    }
-
-    if (action === "timer") {
-        const minutes = parseInt(parts[2]);
-        if (isNaN(minutes) || minutes < 1 || minutes > 1440) {
-            return api.sendMessage("❌ Invalid minutes (1-1440).", threadID, messageID);
-        }
-        if (global.friendManager.jobs.has(targetFile)) {
-            startJobForFile(api, targetFile, minutes);
-            return api.sendMessage(`✅ Timer updated for ${targetFile} (every ${minutes} min).`, threadID, messageID);
-        } else {
-            return api.sendMessage(`❌ Job not running for ${targetFile}. Start it first.`, threadID, messageID);
-        }
-    }
-
-    if (action === "remove") {
-        const userNum = parseInt(parts[2]);
-        if (isNaN(userNum)) return api.sendMessage("❌ Usage: remove <fileNum> <userNum>", threadID, messageID);
-        const data = loadFile(targetFile);
-        const pending = data.members.filter(m => {
-            if (!m.bots || !m.bots[botId]) return true;
-            return !m.bots[botId].isFriend && !m.bots[botId].requestSent;
-        });
-        if (userNum < 1 || userNum > pending.length) {
-            return api.sendMessage(`❌ Invalid user number. Pending users: ${pending.length}`, threadID, messageID);
-        }
-        const user = pending[userNum - 1];
-        removeUserFromFile(targetFile, user.id);
-        return api.sendMessage(`✅ Removed ${user.name || user.id} from ${targetFile}.`, threadID, messageID);
-    }
-
-    return api.sendMessage("❌ Unknown action. Use: stop/reset/timer/remove", threadID, messageID);
 };

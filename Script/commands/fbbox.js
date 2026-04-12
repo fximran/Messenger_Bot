@@ -3,10 +3,10 @@ const moment = require("moment-timezone");
 
 module.exports.config = {
     name: "fbbox",
-    version: "1.2.0",
+    version: "1.3.0",
     hasPermssion: 2,
     credits: "MQL1 Community",
-    description: "Export or add user IDs to box_exports files",
+    description: "Export or add user IDs to box_exports files (compatible with multi-bot friends system)",
     commandCategory: "Admin",
     usages: "export <GroupName> - <IDs> | add <FileNumber> <IDs>",
     cooldowns: 5
@@ -29,8 +29,16 @@ function extractIds(input) {
 // Get sorted list of JSON files
 function getSortedFiles() {
     const files = fs.readdirSync(exportPath).filter(f => f.endsWith(".json"));
-    files.sort(); // alphabetical sort (same as default readdir in box.js)
+    files.sort();
     return files;
+}
+
+// Create a new member object with empty bots container
+function createMemberObject(id) {
+    return {
+        id: id,
+        bots: {}
+    };
 }
 
 module.exports.run = async function({ api, event, args }) {
@@ -98,7 +106,7 @@ module.exports.run = async function({ api, event, args }) {
             return api.sendMessage("❌ No valid Facebook IDs found! IDs should be 10+ digits.", threadID, messageID);
         }
         
-        const membersData = ids.map(id => ({ id }));
+        const membersData = ids.map(id => createMemberObject(id));
         const dummyGroupId = "ext_" + Date.now();
         const safeName = groupName.replace(/[\\/:*?"<>|]/g, "_");
         const filename = `${dummyGroupId}_${safeName}.json`;
@@ -166,11 +174,21 @@ module.exports.run = async function({ api, event, args }) {
             const fileContent = fs.readFileSync(filepath, "utf8");
             const data = JSON.parse(fileContent);
 
+            // Ensure members array exists and has correct format
+            if (!data.members) data.members = [];
+            
+            // Migrate any old members to new format (if they don't have bots)
+            for (const member of data.members) {
+                if (!member.bots) {
+                    member.bots = {};
+                }
+            }
+
             const existingIds = new Set(data.members.map(m => m.id));
             let addedCount = 0;
             for (const id of newIds) {
                 if (!existingIds.has(id)) {
-                    data.members.push({ id });
+                    data.members.push(createMemberObject(id));
                     existingIds.add(id);
                     addedCount++;
                 }
