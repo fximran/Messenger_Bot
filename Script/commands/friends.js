@@ -3,12 +3,12 @@ const path = require("path");
 
 module.exports.config = {
     name: "friends",
-    version: "3.0.0",
+    version: "3.1.0",
     hasPermssion: 2,
     credits: "MQL1 Community",
     description: "Auto send friend requests with interactive controls and auto-remove on failure",
     commandCategory: "Admin",
-    usages: "list | start <file> [min] | stop <file> | reset <file> | status | report [date] | errors | pending <file>",
+    usages: "list | start <file> [min] | stop <file> | reset <file> | status | report [date] | errors",
     cooldowns: 5
 };
 
@@ -56,9 +56,16 @@ function addLogEntry(userId, name, sourceFile) {
     saveLogs(date, logs);
 }
 
-function addErrorEntry(userId, name, sourceFile, error) {
+function addErrorEntry(userId, name, sourceFile, errorMsg) {
     const errors = JSON.parse(fs.readFileSync(errorsLogPath, 'utf8'));
-    errors.push({ timestamp: Date.now(), userId, name, sourceFile, error: error.message || String(error) });
+    errors.push({
+        timestamp: Date.now(),
+        userId,
+        name: name || "Unknown",
+        sourceFile,
+        error: errorMsg
+    });
+    if (errors.length > 100) errors.shift();
     fs.writeFileSync(errorsLogPath, JSON.stringify(errors, null, 2));
 }
 
@@ -88,7 +95,6 @@ function saveFile(filename, data) {
     fs.writeFileSync(path.join(boxExportPath, filename), JSON.stringify(data, null, 2));
 }
 
-// Remove a user from a file by ID
 function removeUserFromFile(filename, userId) {
     const data = loadFile(filename);
     const before = data.members.length;
@@ -101,7 +107,6 @@ function removeUserFromFile(filename, userId) {
     return false;
 }
 
-// Scan file to update missing fields
 async function scanFile(api, filename) {
     const data = loadFile(filename);
     let changed = false;
@@ -121,7 +126,6 @@ async function scanFile(api, filename) {
     if (changed) saveFile(filename, data);
 }
 
-// Process file: update friend status, send one request. On failure, remove user.
 async function processFile(api, filename) {
     const data = loadFile(filename);
     let changed = false;
@@ -138,6 +142,10 @@ async function processFile(api, filename) {
                     member.lastChecked = Date.now();
                     changed = true;
                 }
+                if (!member.name && info[member.id]?.name) {
+                    member.name = info[member.id].name;
+                    changed = true;
+                }
             } catch(e) {}
         }
     }
@@ -145,21 +153,36 @@ async function processFile(api, filename) {
     // 2. Send one request
     for (const member of data.members) {
         if (!member.isFriend && !member.requestSent && !global.friendManager.sentThisSession.has(member.id)) {
+            let userName = member.name;
+            if (!userName) {
+                try {
+                    const info = await api.getUserInfo(member.id);
+                    userName = info[member.id]?.name || "Unknown";
+                    member.name = userName;
+                    changed = true;
+                } catch(e) {
+                    userName = "Unknown";
+                }
+            }
+
             try {
                 await api.sendFriendRequest(member.id);
                 member.requestSent = true;
                 member.lastChecked = Date.now();
                 global.friendManager.sentThisSession.add(member.id);
                 changed = true;
-                addLogEntry(member.id, member.name || "Unknown", filename);
-                console.log(`[Friends] Sent to ${member.name} (${member.id}) from ${filename}`);
+                addLogEntry(member.id, userName, filename);
+                console.log(`[Friends] Sent to ${userName} (${member.id}) from ${filename}`);
                 break;
             } catch(e) {
-                console.error(`[Friends] Failed to send to ${member.id}:`, e.message);
-                addErrorEntry(member.id, member.name || "Unknown", filename, e);
-                // Remove the failed user from file
+                let errorMsg = e.message || String(e);
+                if (e.error) errorMsg = e.error;
+                if (e.errorDescription) errorMsg = e.errorDescription;
+                console.error(`[Friends] Failed to send to ${member.id}:`, errorMsg);
+                addErrorEntry(member.id, userName, filename, errorMsg);
                 removeUserFromFile(filename, member.id);
-                console.log(`[Friends] Removed failed user ${member.id} from ${filename}`);
+                console.log(`[Friends] Removed failed user ${member.id} (${userName}) from ${filename}`);
+                break;
             }
         }
     }
@@ -167,7 +190,6 @@ async function processFile(api, filename) {
     if (changed) saveFile(filename, data);
 }
 
-// Job control
 function startJobForFile(api, filename, minutes) {
     if (global.friendManager.jobs.has(filename)) stopJobForFile(filename);
     const intervalId = setInterval(() => {
@@ -251,36 +273,6 @@ module.exports.run = async ({ api, event, args }) => {
         return api.sendMessage(msg, threadID, messageID);
     }
 
-    // ========== PENDING (view/remove users from a file) ==========
-    if (cmd === "pending") {
-        if (!target) return api.sendMessage("❌ Usage: /friends pending <filename/number>", threadID, messageID);
-        const filename = resolveFilename(target);
-        if (!filename) return api.sendMessage("❌ Invalid file.", threadID, messageID);
-        const data = loadFile(filename);
-        const pending = data.members.filter(m => !m.isFriend && !m.requestSent);
-        if (pending.length === 0) {
-            return api.sendMessage(`✅ No pending users in ${filename}.`, threadID, messageID);
-        }
-        let msg = `📋 PENDING USERS - ${filename}\n━━━━━━━━━━━━━━━━━━━━\n📊 Total: ${pending.length}\n\n`;
-        for (let i = 0; i < Math.min(pending.length, 30); i++) {
-            const u = pending[i];
-            msg += `${i+1}. ${u.name || "Unknown"} (${u.id})\n`;
-        }
-        msg += `\n💡 Reply with "remove <number>" to delete that user from file.`;
-        return api.sendMessage(msg, threadID, (err, info) => {
-            if (!err) {
-                global.client.handleReply.push({
-                    name: this.config.name,
-                    messageID: info.messageID,
-                    author: senderID,
-                    type: "pending_remove",
-                    filename,
-                    pending
-                });
-            }
-        }, messageID);
-    }
-
     // ========== LIST ==========
     if (cmd === "list") {
         const files = getSortedFiles();
@@ -328,7 +320,7 @@ module.exports.run = async ({ api, event, args }) => {
     }
 
     // ========== STATUS (interactive) ==========
-    if (cmd === "status") {
+    if (cmd === "0" || cmd === "status") {
         const files = getSortedFiles();
         const fileStats = [];
         let totalUsers = 0, totalFriends = 0, totalRequested = 0;
@@ -374,83 +366,62 @@ module.exports.run = async ({ api, event, args }) => {
         `🔹 /friends stop <file>\n` +
         `🔹 /friends reset <file>\n` +
         `🔹 /friends status - Interactive control\n` +
-        `🔹 /friends pending <file> - View/remove pending users\n` +
         `🔹 /friends report [date]\n` +
         `🔹 /friends errors [clear]`,
         threadID, messageID
     );
 };
 
-// ========== HANDLE REPLY ==========
+// ========== HANDLE REPLY (only status_control) ==========
 module.exports.handleReply = async function({ api, event, handleReply }) {
     const { threadID, messageID, senderID, body } = event;
-    const { author, type, filename, pending, fileStats, files } = handleReply;
+    const { author, type, files } = handleReply;
     if (senderID != author) return;
 
-    const reply = body.toLowerCase().trim();
+    if (type !== "status_control") return;
+    const parts = body.toLowerCase().trim().split(/\s+/);
+    const action = parts[0];
+    const num = parseInt(parts[1]);
+    if (isNaN(num) || num < 1 || num > files.length) {
+        return api.sendMessage("❌ Invalid file number.", threadID, messageID);
+    }
+    const targetFile = files[num - 1];
 
-    // ----- PENDING REMOVE -----
-    if (type === "pending_remove") {
-        if (reply.startsWith("remove")) {
-            const parts = reply.split(" ");
-            const num = parseInt(parts[1]);
-            if (isNaN(num) || num < 1 || num > pending.length) {
-                return api.sendMessage("❌ Invalid number.", threadID, messageID);
-            }
-            const user = pending[num - 1];
-            removeUserFromFile(filename, user.id);
-            return api.sendMessage(`✅ Removed ${user.name} (${user.id}) from ${filename}.`, threadID, messageID);
-        }
-        return;
+    if (action === "stop") {
+        const stopped = stopJobForFile(targetFile);
+        return api.sendMessage(stopped ? `✅ Stopped ${targetFile}.` : `⚠️ Not running.`, threadID, messageID);
     }
 
-    // ----- STATUS CONTROL -----
-    if (type === "status_control") {
-        const parts = reply.split(/\s+/);
-        const action = parts[0];
-        const num = parseInt(parts[1]);
-        if (isNaN(num) || num < 1 || num > files.length) {
-            return api.sendMessage("❌ Invalid file number.", threadID, messageID);
-        }
-        const targetFile = files[num - 1];
-
-        if (action === "stop") {
-            const stopped = stopJobForFile(targetFile);
-            return api.sendMessage(stopped ? `✅ Stopped ${targetFile}.` : `⚠️ Not running.`, threadID, messageID);
-        }
-
-        if (action === "reset") {
-            resetFile(targetFile);
-            return api.sendMessage(`✅ Reset lastChecked for ${targetFile}.`, threadID, messageID);
-        }
-
-        if (action === "timer") {
-            const minutes = parseInt(parts[2]);
-            if (isNaN(minutes) || minutes < 1 || minutes > 1440) {
-                return api.sendMessage("❌ Invalid minutes (1-1440).", threadID, messageID);
-            }
-            // Restart job with new interval
-            if (global.friendManager.jobs.has(targetFile)) {
-                startJobForFile(api, targetFile, minutes);
-                return api.sendMessage(`✅ Timer updated for ${targetFile} (every ${minutes} min).`, threadID, messageID);
-            } else {
-                return api.sendMessage(`❌ Job not running for ${targetFile}. Start it first.`, threadID, messageID);
-            }
-        }
-
-        if (action === "remove") {
-            const userNum = parseInt(parts[2]);
-            if (isNaN(userNum)) return api.sendMessage("❌ Usage: remove <fileNum> <userNum>", threadID, messageID);
-            const data = loadFile(targetFile);
-            const pending = data.members.filter(m => !m.isFriend && !m.requestSent);
-            if (userNum < 1 || userNum > pending.length) {
-                return api.sendMessage(`❌ Invalid user number. Pending users: ${pending.length}`, threadID, messageID);
-            }
-            const user = pending[userNum - 1];
-            removeUserFromFile(targetFile, user.id);
-            return api.sendMessage(`✅ Removed ${user.name} (${user.id}) from ${targetFile}.`, threadID, messageID);
-        }
-
-        return api.sendMessage("❌ Unknown action. Use: stop/reset/timer/remove", threadID, messageID);
+    if (action === "reset") {
+        resetFile(targetFile);
+        return api.sendMessage(`✅ Reset lastChecked for ${targetFile}.`, threadID, messageID);
     }
+
+    if (action === "timer") {
+        const minutes = parseInt(parts[2]);
+        if (isNaN(minutes) || minutes < 1 || minutes > 1440) {
+            return api.sendMessage("❌ Invalid minutes (1-1440).", threadID, messageID);
+        }
+        if (global.friendManager.jobs.has(targetFile)) {
+            startJobForFile(api, targetFile, minutes);
+            return api.sendMessage(`✅ Timer updated for ${targetFile} (every ${minutes} min).`, threadID, messageID);
+        } else {
+            return api.sendMessage(`❌ Job not running for ${targetFile}. Start it first.`, threadID, messageID);
+        }
+    }
+
+    if (action === "remove") {
+        const userNum = parseInt(parts[2]);
+        if (isNaN(userNum)) return api.sendMessage("❌ Usage: remove <fileNum> <userNum>", threadID, messageID);
+        const data = loadFile(targetFile);
+        const pending = data.members.filter(m => !m.isFriend && !m.requestSent);
+        if (userNum < 1 || userNum > pending.length) {
+            return api.sendMessage(`❌ Invalid user number. Pending users: ${pending.length}`, threadID, messageID);
+        }
+        const user = pending[userNum - 1];
+        removeUserFromFile(targetFile, user.id);
+        return api.sendMessage(`✅ Removed ${user.name} (${user.id}) from ${targetFile}.`, threadID, messageID);
+    }
+
+    return api.sendMessage("❌ Unknown action. Use: stop/reset/timer/remove", threadID, messageID);
 };
