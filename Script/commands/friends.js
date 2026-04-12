@@ -3,27 +3,64 @@ const path = require("path");
 
 module.exports.config = {
     name: "friends",
-    version: "2.1.0",
+    version: "2.2.0",
     hasPermssion: 2,
     credits: "MQL1 Community",
-    description: "Auto send friend requests to users from box_exports files (per file)",
+    description: "Auto send friend requests to users from box_exports files (per file) with daily report",
     commandCategory: "Admin",
-    usages: "list | start <filename/number> [minutes] | stop <filename/number> | reset <filename/number> | status",
+    usages: "list | start <file> [min] | stop <file> | reset <file> | status | report [date]",
     cooldowns: 5
 };
 
-// Path to box_exports folder
+// Paths
 const boxExportPath = path.join(__dirname, "cache", "box_exports");
-if (!fs.existsSync(boxExportPath)) {
-    fs.mkdirSync(boxExportPath, { recursive: true });
-}
+const logsPath = path.join(__dirname, "cache", "friends_logs");
+
+if (!fs.existsSync(boxExportPath)) fs.mkdirSync(boxExportPath, { recursive: true });
+if (!fs.existsSync(logsPath)) fs.mkdirSync(logsPath, { recursive: true });
 
 // Global state for cron jobs
 if (!global.friendManager) {
     global.friendManager = {
-        jobs: new Map(), // key: filename, value: { running: true, intervalId, intervalMinutes }
+        jobs: new Map(),
         sentThisSession: new Set()
     };
+}
+
+// Helper: get today's date string YYYY-MM-DD
+function getTodayDate() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Helper: get log file path for a date
+function getLogPath(date) {
+    return path.join(logsPath, `${date}.json`);
+}
+
+// Helper: load logs for a date
+function loadLogs(date) {
+    const p = getLogPath(date);
+    if (!fs.existsSync(p)) return [];
+    return JSON.parse(fs.readFileSync(p, 'utf8'));
+}
+
+// Helper: save logs for a date
+function saveLogs(date, logs) {
+    fs.writeFileSync(getLogPath(date), JSON.stringify(logs, null, 2));
+}
+
+// Helper: add a log entry
+function addLogEntry(userId, name, sourceFile) {
+    const date = getTodayDate();
+    const logs = loadLogs(date);
+    logs.push({
+        timestamp: Date.now(),
+        userId,
+        name,
+        sourceFile
+    });
+    saveLogs(date, logs);
 }
 
 // Helper: get sorted list of JSON files
@@ -33,7 +70,7 @@ function getSortedFiles() {
         .sort();
 }
 
-// Helper: resolve target to filename (accepts number or filename)
+// Helper: resolve target to filename
 function resolveFilename(target) {
     const files = getSortedFiles();
     if (/^\d+$/.test(target)) {
@@ -106,6 +143,7 @@ async function processFile(api, filename) {
                 member.lastChecked = Date.now();
                 global.friendManager.sentThisSession.add(member.id);
                 changed = true;
+                addLogEntry(member.id, member.name || "Unknown", filename);
                 console.log(`[Friends] Sent request to ${member.name} (${member.id}) from ${filename}`);
                 break;
             } catch(e) {
@@ -141,7 +179,7 @@ function stopJobForFile(filename) {
     return false;
 }
 
-// Reset lastChecked only (keep requestSent)
+// Reset lastChecked only
 function resetFile(filename) {
     const data = loadFile(filename);
     for (const member of data.members) {
@@ -171,7 +209,29 @@ module.exports.run = async ({ api, event, args }) => {
     const target = args[1];
     const option = args[2];
 
-    // ========== LIST (show files like /box file list) ==========
+    // ========== REPORT ==========
+    if (cmd === "report") {
+        let date = target;
+        if (!date) date = getTodayDate();
+        // Validate date format YYYY-MM-DD
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            return api.sendMessage("❌ Invalid date format. Use YYYY-MM-DD", threadID, messageID);
+        }
+        const logs = loadLogs(date);
+        if (logs.length === 0) {
+            return api.sendMessage(`📋 No friend requests sent on ${date}.`, threadID, messageID);
+        }
+        let msg = `📋 FRIEND REQUEST REPORT - ${date}\n━━━━━━━━━━━━━━━━━━━━\n`;
+        msg += `📊 Total Sent: ${logs.length}\n\n`;
+        for (let i = 0; i < logs.length; i++) {
+            const l = logs[i];
+            const time = new Date(l.timestamp).toLocaleTimeString();
+            msg += `${i+1}. ${l.name} (${l.userId})\n   📁 ${l.sourceFile} at ${time}\n\n`;
+        }
+        return api.sendMessage(msg, threadID, messageID);
+    }
+
+    // ========== LIST ==========
     if (cmd === "list") {
         const files = getSortedFiles();
         if (files.length === 0) {
@@ -230,7 +290,7 @@ module.exports.run = async ({ api, event, args }) => {
         return api.sendMessage(`✅ Reset lastChecked for ${filename}. (requestSent unchanged)`, threadID, messageID);
     }
 
-    // ========== STATUS (overall) ==========
+    // ========== STATUS ==========
     if (cmd === "status") {
         const files = getSortedFiles();
         let totalUsers = 0, totalFriends = 0, totalRequested = 0;
@@ -241,10 +301,12 @@ module.exports.run = async ({ api, event, args }) => {
             totalRequested += stats.requested;
         }
         const activeJobs = Array.from(global.friendManager.jobs.entries()).map(([f, j]) => `• ${f} (every ${j.intervalMinutes} min)`).join('\n');
+        const todayLogs = loadLogs(getTodayDate());
         let msg = `📊 FRIEND MANAGER STATUS\n━━━━━━━━━━━━━━━━━━━━\n`;
         msg += `👥 Total Users: ${totalUsers}\n`;
         msg += `✅ Friends: ${totalFriends}\n`;
-        msg += `⏳ Requests Sent: ${totalRequested}\n`;
+        msg += `⏳ Requests Sent (total): ${totalRequested}\n`;
+        msg += `📅 Sent Today: ${todayLogs.length}\n`;
         msg += `⏰ Pending: ${totalUsers - totalFriends - totalRequested}\n`;
         msg += `\n⚙️ Active Jobs:\n${activeJobs || 'None'}`;
         return api.sendMessage(msg, threadID, messageID);
@@ -257,7 +319,8 @@ module.exports.run = async ({ api, event, args }) => {
         `🔹 /friends start <file> [min] - Start automation for a file (default 15 min)\n` +
         `🔹 /friends stop <file> - Stop automation for a file\n` +
         `🔹 /friends reset <file> - Reset lastChecked only (keeps requestSent)\n` +
-        `🔹 /friends status - Show overall statistics`,
+        `🔹 /friends status - Show overall statistics\n` +
+        `🔹 /friends report [date] - Show today's sent requests (or specific date YYYY-MM-DD)`,
         threadID, messageID
     );
 };
