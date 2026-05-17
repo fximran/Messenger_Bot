@@ -49,7 +49,7 @@ db.serialize(() => {
 cron.schedule('0 2 * * *', () => {
     const daysToKeep = 30;
     db.run(`DELETE FROM activity_logs WHERE created_at < datetime('now', '-' || ? || ' days')`, [daysToKeep],
-        function(err) {
+        function (err) {
             if (err) console.error('Auto-clean error:', err);
             else console.log(`Auto-cleaned ${this.changes} old activity logs.`);
         });
@@ -73,7 +73,7 @@ function getPanelConfig() {
         if (fs.existsSync(configPath)) {
             return JSON.parse(fs.readFileSync(configPath, "utf8"));
         }
-    } catch (e) {}
+    } catch (e) { }
     return {};
 }
 const panelConfig = getPanelConfig();
@@ -159,7 +159,7 @@ function readConfig() {
         if (fs.existsSync(configPath)) {
             return JSON.parse(fs.readFileSync(configPath, "utf8"));
         }
-    } catch (e) {}
+    } catch (e) { }
     return {};
 }
 
@@ -225,7 +225,7 @@ app.post('/api/users', requireAuth, requirePermission(2), async (req, res) => {
         const hashed = await bcrypt.hash(password, 10);
         db.run('INSERT INTO users (name, email, password, permission) VALUES (?, ?, ?, ?)',
             [name, email, hashed, permission || 0],
-            function(err) {
+            function (err) {
                 if (err) {
                     if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Email already exists.' });
                     return res.status(500).json({ error: err.message });
@@ -248,7 +248,7 @@ app.put('/api/users/:id', requireAuth, requirePermission(2), async (req, res) =>
     if (updates.length === 0) return res.status(400).json({ error: 'No fields to update.' });
     updates.push('updated_at = CURRENT_TIMESTAMP');
     params.push(id);
-    db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params, function(err) {
+    db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params, function (err) {
         if (err) {
             if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Email already exists.' });
             return res.status(500).json({ error: err.message });
@@ -259,7 +259,7 @@ app.put('/api/users/:id', requireAuth, requirePermission(2), async (req, res) =>
 });
 app.delete('/api/users/:id', requireAuth, requirePermission(3), (req, res) => {
     const { id } = req.params;
-    db.run('DELETE FROM users WHERE id = ?', id, function(err) {
+    db.run('DELETE FROM users WHERE id = ?', id, function (err) {
         if (err) return res.status(500).json({ error: err.message });
         if (this.changes === 0) return res.status(404).json({ error: 'User not found.' });
         logActivity(req.session.user.id, req.session.user.name, 'USER_DELETE', `Deleted user ID ${id}`, req);
@@ -310,10 +310,26 @@ app.get('/api/status', requireAuth, (req, res) => {
     });
 });
 app.post('/api/start', requireAuth, (req, res) => {
-    exec(`pm2 start ${PM2_PROCESS_NAME}`, (error) => {
-        if (error) return res.status(500).json({ error: error.message });
-        logActivity(req.session.user.id, req.session.user.name, 'BOT_START', 'Started messenger-bot', req);
-        res.json({ success: true });
+    const botScript = path.join(__dirname, 'Cyber.js');
+
+    exec(`pm2 jlist`, (listError, stdout) => {
+        if (listError) return res.status(500).json({ error: listError.message });
+
+        let exists = false;
+        try {
+            const list = JSON.parse(stdout || '[]');
+            exists = list.some(p => p.name === PM2_PROCESS_NAME);
+        } catch (e) { }
+
+        const cmd = exists
+            ? `pm2 start ${PM2_PROCESS_NAME} --update-env`
+            : `pm2 start "${botScript}" --name ${PM2_PROCESS_NAME} --cwd "${__dirname}" --update-env`;
+
+        exec(cmd, (error) => {
+            if (error) return res.status(500).json({ error: error.message });
+            logActivity(req.session.user.id, req.session.user.name, 'BOT_START', 'Started messenger-bot', req);
+            res.json({ success: true });
+        });
     });
 });
 app.post('/api/stop', requireAuth, (req, res) => {
@@ -395,7 +411,7 @@ app.get('/api/groupfiles', requireAuth, requirePermission(2), (req, res) => {
                     const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
                     groupName = content.groupName || 'Unknown';
                     totalMembers = content.totalMembers || 0;
-                } catch (e) {}
+                } catch (e) { }
                 return { filename: f, groupName, totalMembers, size: stats.size, modified: stats.mtime };
             });
         res.json(files);
@@ -522,7 +538,7 @@ app.get('/api/automessages', requireAuth, requirePermission(2), (req, res) => {
                     groupId = f.replace('automessage_', '').replace('.json', '');
                     enabled = content.enabled || false;
                     messageCount = content.messages?.length || 0;
-                } catch (e) {}
+                } catch (e) { }
                 return { filename: f, groupId, enabled, messageCount, size: stats.size, modified: stats.mtime };
             });
         res.json(files);
@@ -656,7 +672,7 @@ app.get('/api/faqfiles', requireAuth, requirePermission(2), (req, res) => {
                     const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
                     groupId = f.replace('faq_', '').replace('.json', '');
                     questionCount = content.length || 0;
-                } catch (e) {}
+                } catch (e) { }
                 return {
                     filename: f,
                     groupId,
